@@ -77,40 +77,42 @@ Data Serialization}
 
 \titlerunning{Hydration Leakage in Next.js}
 
-\author{Arnav Garg}
+\author{Anonymous Author}
 
-\authorrunning{A. Garg}
+\authorrunning{Anonymous}
 
 \institute{
-  Department of Computer Science\\
-  \email{arnav@example.com}
+  Anonymous Institution\\
+  \email{anonymous@anonymous.edu}
 }
 
 \maketitle
 
 % ─────────────────────────────────────────────────────────────
 \begin{abstract}
-Modern full-stack web frameworks such as Next.js achieve high performance
-by pre-rendering pages on the server and then \emph{hydrating} them on
-the client.  This hydration process requires serializing server-side data
-into the HTML response so that the browser can reconstruct React's
-component tree without an additional network round-trip.  We demonstrate
-that this mechanism, when combined with the common developer anti-pattern
-of returning raw database records as component props, causes sensitive
-fields---including password hashes, API keys, Social Security Numbers, and
-two-factor authentication secrets---to be silently embedded in plain-text
-HTML and transmitted to every unauthenticated client.  The vulnerability
-affects both the legacy Pages Router (via the \texttt{\_\_NEXT\_DATA\_\_}
-script tag) and the modern App Router (via React Server Component streaming
-payloads).  We present an intentionally vulnerable proof-of-concept
-application, an automated Python scanner capable of detecting exposure
-across both serialization channels, and a Data Transfer Object (DTO)
-mitigation that eliminates 100\% of confirmed critical findings with
-minimal code changes.  Our scanner confirmed 24 critical credential
-exposures across two route implementations; after applying the DTO
-pattern, zero critical findings remained.  We argue that explicit,
-allowlist-based data stripping at the server--client boundary must become
-a standard practice in Next.js development.
+Next.js and similar full-stack frameworks gain their performance edge
+through server-side pre-rendering followed by client-side
+\emph{hydration}.  The mechanics are well understood: the server
+serializes data into the HTML response so the browser can reconstruct
+React's component tree without a second network round-trip.  What is
+considerably less obvious is the security consequence.  When developers
+return raw database records as component props---a widespread and
+seemingly harmless pattern---every field in those records, including
+password hashes, API keys, Social Security Numbers, and two-factor
+authentication secrets, is silently embedded in plain-text HTML and
+delivered to every requesting client, authenticated or not.  The
+vulnerability manifests across both the legacy Pages Router (through
+the \texttt{\_\_NEXT\_DATA\_\_} script tag) and the modern App Router
+(through React Server Component streaming payloads).  We present three
+artifacts: an intentionally vulnerable proof-of-concept application, an
+automated Python scanner that detects exposure across both serialization
+channels, and a Data Transfer Object (DTO) mitigation that eliminated
+100\% of confirmed critical findings in our experiments.  The scanner
+identified 24 critical credential exposures across two route
+implementations.  After applying the DTO pattern, zero critical findings
+remained.  Explicit, allowlist-based data stripping at the
+server--client boundary is not optional good practice.  It is a
+security requirement.
 \end{abstract}
 
 \keywords{Next.js \and React \and hydration \and data leakage \and
@@ -119,38 +121,42 @@ a standard practice in Next.js development.
 \begin{footnotesize}
 \textbf{Artifact availability.} The proof-of-concept application,
 automated scanner, scan reports, and \LaTeX{} source for this paper are
-openly available at:
-\url{https://github.com/gargarnav/next-js_vulnerabilities}
+available at:
+\url{[Link redacted for double-blind review]}
 \end{footnotesize}
 
 % ─────────────────────────────────────────────────────────────
 \section{Introduction}
 \label{sec:intro}
 
-Server-Side Rendering (SSR) has undergone a significant renaissance since
-the widespread adoption of React-based meta-frameworks.  Unlike traditional
-single-page applications that fetch data entirely on the client,
-SSR frameworks such as Next.js, Nuxt, and SvelteKit generate complete HTML
-on the server and stream it to the browser, dramatically improving both
-perceived performance and search-engine discoverability~\cite{next16docs}.
+Server-Side Rendering (SSR) is no longer a niche technique.  Since
+React-based meta-frameworks like Next.js, Nuxt, and SvelteKit went
+mainstream, SSR has become the default architecture for production web
+applications---valued for its effect on perceived load time and
+search-engine discoverability~\cite{next16docs}.  The model is
+conceptually simple: the server generates a complete HTML page and
+streams it to the browser, which then takes over rendering
+responsibilities.
 
-The process of making a server-rendered HTML page interactive---known as
-\emph{hydration}---requires the client-side JavaScript runtime to receive
-the same data that the server used to render the page.  In practice, this
-data is embedded directly in the HTML response as a serialized JSON payload.
-This design is intentional and necessary for React's reconciliation
-algorithm to avoid redundant fetches, but it creates a silent security
-hazard: \emph{every field in every object passed from the server to a
-client component is publicly visible in the HTML source of the page.}
+Taking over requires data.  The client-side JavaScript runtime must
+receive exactly the data the server used to render the page, or React's
+reconciliation algorithm cannot hydrate the component tree without an
+additional network fetch.  In practice, this means the data is
+serialized directly into the HTML response as a JSON payload.  The
+design is intentional---and, under certain conditions, it constitutes a
+serious security hazard: \emph{every field in every object passed from
+server to client component is publicly readable in the HTML source.}
 
-The problem is compounded by the intuitive but incorrect mental model many
-developers hold.  Seeing that a component only \emph{displays} a user's
-name and email, a developer may not realize that the entire user object---
-including its \texttt{password\_hash}, \texttt{api\_key}, and
-\texttt{ssn} fields---was serialized into the response.  No developer
-tool warns about this.  No browser security policy blocks it.  The data
-simply appears in plaintext in the page source, readable by any person or
-automated script that requests the URL.
+The hazard is easy to miss.  A developer looks at a component that
+displays a user's name and email.  The component works correctly.
+Nothing appears wrong.  What that developer may not consider is that
+the entire \texttt{User} object---including its \texttt{password\_hash},
+\texttt{api\_key}, and \texttt{ssn} fields---was serialized into the
+response alongside the fields the component actually renders.  No
+development tool raises a warning.  No browser security policy
+intervenes.  The data is simply there, in plaintext, in the page
+source, retrievable by any person or automated script that issues an
+HTTP request.
 
 This paper makes the following contributions:
 
@@ -173,8 +179,7 @@ This paper makes the following contributions:
 
 All artefacts---the vulnerable and mitigated Next.js application, the
 Python scanner, all scan reports, and the source for this paper---are
-publicly available at
-\url{https://github.com/gargarnav/next-js_vulnerabilities}.
+available at \url{[Link redacted for double-blind review]}.
 
 % ─────────────────────────────────────────────────────────────
 \section{Background and Related Work}
@@ -182,86 +187,91 @@ publicly available at
 
 \subsection{Server-Side Rendering and Hydration}
 
-Next.js supports two rendering models relevant to this work.  In the
-\emph{Pages Router} model, each page exports a \texttt{getServerSideProps}
-function that runs on the server per request, fetches data, and returns it
-as a plain JavaScript object.  Next.js then passes these props as
-arguments to the React component and serializes the entire \texttt{props}
-object into a JSON blob embedded in a \texttt{<script>} tag with
-\texttt{id="\_\_NEXT\_DATA\_\_"}~\cite{next16docs}.  This tag is
-transmitted to every client regardless of authentication state.
+Next.js exposes two rendering models relevant to this work.  In the
+\emph{Pages Router}---the older paradigm---each page exports a
+\texttt{getServerSideProps} function that runs on the server for every
+incoming request, fetches data, and returns a plain JavaScript object.
+Next.js passes that object as props to the React component and,
+critically, serializes the entire \texttt{props} tree into a JSON blob
+embedded in a \texttt{<script>} tag bearing
+\texttt{id="\_\_NEXT\_DATA\_\_"}~\cite{next16docs}.  That tag is
+transmitted to every client, regardless of authentication state.
 
-The \emph{App Router}, introduced in Next.js 13 and stabilised in version
-14+, uses React Server Components (RSC)~\cite{rsc2023}.  Server
-Components run exclusively on the server and can fetch data directly, but
-any data passed as props to a \texttt{'use client'} Client Component must
-cross the server--client serialization boundary.  The RSC protocol
-encodes this data as a series of \texttt{self.\_\_next\_f.push([type,
-payload])} inline script calls, where the payload contains a
-newline-delimited stream of JSON-encoded React tree segments.
+The \emph{App Router}, introduced in Next.js 13 and stabilised in
+version 14+, works differently.  It uses React Server
+Components (RSC)~\cite{rsc2023}.  Server Components run exclusively on
+the server and can fetch data directly, but when one passes props to a
+\texttt{'use client'} Client Component those props must cross the
+server--client serialization boundary.  The RSC protocol encodes that
+data as a stream of \texttt{self.\_\_next\_f.push([type, payload])}
+inline script calls, where the payload carries newline-delimited,
+JSON-encoded React tree segments.
 
-In both models, the mechanism is \emph{necessary} for correct hydration
-but \emph{dangerous} when the data objects contain fields that were never
-intended for client consumption.
+In both models, the mechanism is \emph{necessary} for correct
+hydration.  It is equally \emph{dangerous} when the objects crossing
+the boundary contain fields that were never intended for client
+consumption.
 
 \subsection{Relationship to Existing Vulnerability Classes}
 
-Hydration leakage is distinct from classical web vulnerabilities in
-several important ways.  Unlike Cross-Site Scripting
-(XSS)~\cite{owasp_xss}, it does not require injecting malicious content;
-the server itself is the origin of the exposure.  Unlike SQL
-injection~\cite{owasp_sqli}, it does not involve a malformed query;
-the application logic is otherwise correct.  Unlike information disclosure
-via verbose error messages~\cite{cwe200}, the exposure is not a failure
-mode but a side-effect of the normal, successful request--response cycle.
+Hydration leakage does not fit neatly into classical vulnerability
+categories, and that is part of what makes it easy to overlook.  Unlike
+Cross-Site Scripting (XSS)~\cite{owasp_xss}, no content injection is
+involved---the server is the source.  Unlike SQL
+injection~\cite{owasp_sqli}, the query is well-formed and the
+application logic is otherwise correct.  Unlike information disclosure
+through verbose error messages~\cite{cwe200}, the exposure is not a
+failure mode.  It is a side-effect of a perfectly successful request.
 
-Content Security Policy (CSP) headers, which are the standard mitigation
-for XSS, offer no protection: the leaking data is not injected script but
-first-party server-rendered JSON~\cite{csp_mdn}.  HTTPS prevents
-interception in transit, but the exposure is at the \emph{origin}---any
-authenticated or unauthenticated browser request retrieves the data.
-Rate limiting and bot detection can slow enumeration but cannot prevent
-a single manual page view from exposing all serialized records.
+Standard defences offer no relief.  Content Security Policy headers,
+the canonical XSS mitigation, do nothing here: the leaking data is
+first-party, server-rendered JSON, not injected script~\cite{csp_mdn}.
+HTTPS prevents interception in transit, but the exposure sits at the
+\emph{origin}---any browser request, authenticated or not, retrieves
+the data.  Rate limiting and bot detection can slow bulk enumeration.
+They cannot stop a single manual page view from exposing every
+serialized record.
 
 \subsection{Prior Work}
 
-Concerns about Next.js data exposure were first widely documented in
-practitioner blog posts circa 2021--2022, following the release of
-\texttt{getServerSideProps}~\cite{nwh2022}.  Netanel Basal~\cite{basal2022}
-and the Next.js security documentation~\cite{next_security} warn that
-\texttt{getServerSideProps} return values are client-visible, but neither
-provides tooling for automated detection.
+Practitioners first raised concerns about Next.js data exposure in blog
+posts around 2021--2022, in the wake of
+\texttt{getServerSideProps}~\cite{nwh2022}.  Netanel
+Basal~\cite{basal2022} and the official Next.js security
+documentation~\cite{next_security} both caution that return values from
+\texttt{getServerSideProps} are visible to clients, but neither provides
+automated detection tooling.
 
-Academic treatment of framework-specific serialization risks remains
-sparse.  Luo et al.~\cite{luo2023} analyze state exposure in SPAs through
-Redux DevTools, which requires browser extension access.  Our work is
-distinct in targeting the \emph{network-layer} exposure that requires no
-special tooling---only an HTTP client---and in covering both the legacy and
-modern Next.js routing paradigms.
+Academic coverage of framework-specific serialization risk remains
+sparse.  Luo et al.~\cite{luo2023} examine state exposure in SPAs via
+Redux DevTools, which requires browser extension access.  The work
+presented here targets network-layer exposure: no extension required,
+no special tooling---just an HTTP client.  It also covers both the
+legacy and modern Next.js routing paradigms, which prior work does not.
 
-The OWASP API Security Top 10~\cite{owasp_api2023} lists \emph{Excessive
-Data Exposure} (API3:2023) as a top-tier risk, defining it as an API
-returning more data than the client needs and relying on the client to
-filter.  Our findings constitute a precise instantiation of this risk
-class within the SSR hydration context.
+The OWASP API Security Top 10~\cite{owasp_api2023} identifies
+\emph{Excessive Data Exposure} (API3:2023) as a top-tier risk, defined
+as APIs returning more data than the client needs and relying on the
+client to filter.  Our findings are a concrete instantiation of this
+risk class, grounded in the SSR hydration context.
 
 % ─────────────────────────────────────────────────────────────
 \section{Methodology}
 \label{sec:methodology}
 
-Our methodology proceeds in two phases: constructing an instrumentally
-vulnerable application that faithfully models real-world developer
-mistakes, and building an automated scanner to detect the resulting
-exposure.
+The methodology has two parts.  The first is a purpose-built vulnerable
+application that faithfully reproduces the class of developer mistakes
+that trigger hydration leakage.  The second is an automated scanner
+designed to detect the resulting exposure.
 
 \subsection{Phase 1: Vulnerable Proof-of-Concept Application}
 
-We implemented a Next.js 16.1.6 application using React 19 and
-TypeScript, hosted on a local development server.  The application
-contains a mock user database stored as a JSON file
-(\texttt{src/db/users.json}) with three synthetic user records.  Each
-record contains both publicly-appropriate fields and sensitive fields
-that should never reach the client, as detailed in Table~\ref{tab:schema}.
+We built a Next.js 16.1.6 application in React 19 and TypeScript,
+running on a local development server.  A mock user database lives in
+\texttt{src/db/users.json} as three synthetic records.  Each record
+carries a mix of fields: some suited to public exposure, others that
+must never reach a client browser.  The full schema is detailed in
+Table~\ref{tab:schema}.
 
 \begin{table}[H]
   \caption{Mock user database schema showing public and sensitive fields.}
@@ -288,10 +298,10 @@ that should never reach the client, as detailed in Table~\ref{tab:schema}.
 \subsubsection{Vulnerability 1: Pages Router (\texttt{\_\_NEXT\_DATA\_\_})}
 
 The Pages Router page at \texttt{/vulnerable-pages} exports
-\texttt{getServerSideProps}, which fetches all user records from the
-database and returns them as the \texttt{users} prop.  The component
-renders only the user's name, email, and role.  Listing~\ref{lst:vuln_pages}
-shows the vulnerable pattern.
+\texttt{getServerSideProps}, which fetches the full user list and
+returns it as the \texttt{users} prop.  The React component renders
+only name, email, and role.  Listing~\ref{lst:vuln_pages} shows the
+vulnerable pattern.
 
 \begin{lstlisting}[style=typescript, caption={Vulnerable Pages Router: raw
   database objects returned as props.}, label={lst:vuln_pages}]
@@ -305,8 +315,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async () => {
 };
 \end{lstlisting}
 
-The resulting HTML contains the following embedded JSON, which is
-accessible to any HTTP client that requests the page:
+The resulting HTML contains the embedded JSON shown in
+Listing~\ref{lst:next_data}.  Every field---the bcrypt hash, TOTP seed,
+API key, and SSN---appears verbatim in the page source, reachable by
+any HTTP request.
 
 \begin{lstlisting}[style=json, caption={Excerpt of \_\_NEXT\_DATA\_\_ in
   the HTML response, showing leaked credentials.}, label={lst:next_data}]
@@ -332,9 +344,10 @@ accessible to any HTTP client that requests the page:
 
 \subsubsection{Vulnerability 2: App Router (RSC Payload)}
 
-The App Router page at \texttt{/vulnerable} uses a Server Component to
-fetch users and pass the raw array to a \texttt{'use client'} Client
-Component.  Listing~\ref{lst:vuln_app} shows the Server Component.
+The App Router page at \texttt{/vulnerable} is a Server Component that
+fetches users and passes the raw array to a \texttt{'use client'}
+Client Component.  Listing~\ref{lst:vuln_app} shows the Server
+Component.
 
 \begin{lstlisting}[style=typescript, caption={Vulnerable App Router:
   raw objects crossing the RSC serialization boundary.},
@@ -349,31 +362,30 @@ export default async function VulnerableAppRouterPage() {
 }
 \end{lstlisting}
 
-Although the \texttt{UserListClient} component only renders
-\texttt{user.name} and \texttt{user.email} in its JSX, the entire
-\texttt{User} object---including \texttt{password\_hash},
-\texttt{api\_key}, \texttt{ssn}, and \texttt{two\_factor\_secret}---is
-serialized into the RSC streaming payload embedded in the initial HTML
-response.
+\texttt{UserListClient} renders only \texttt{user.name} and
+\texttt{user.email}.  That restraint is irrelevant.  The entire
+\texttt{User} object---\texttt{password\_hash}, \texttt{api\_key},
+\texttt{ssn}, \texttt{two\_factor\_secret} and all---is serialized into
+the RSC streaming payload embedded in the initial HTML response.
 
-The RSC protocol encodes data as consecutive inline script calls of the
-form \texttt{self.\_\_next\_f.push([type, data])}, where row type 1
-carries JSON-encoded component tree segments.  Unlike the Pages Router
-\texttt{\_\_NEXT\_DATA\_\_} blob, the RSC payload is fragmented across
-many such calls and requires parsing of a newline-delimited format where
-each line is \texttt{<row\_id>:<json\_value>}.
+The RSC protocol fragments this data across consecutive
+\texttt{self.\_\_next\_f.push([type, data])} calls, with row type 1
+carrying JSON-encoded component tree segments.  Unlike the monolithic
+\texttt{\_\_NEXT\_DATA\_\_} blob, the RSC payload is spread across many
+such calls and requires parsing a newline-delimited format where each
+line takes the form \texttt{<row\_id>:<json\_value>}.
 
 \subsection{Phase 2: Automated Vulnerability Scanner}
 
-We implemented a Python 3.12 scanner (\texttt{scanner.py}, $\approx$310
-lines) that automates the detection of hydration leakage.  The scanner
-uses \texttt{requests} for HTTP fetching and \texttt{BeautifulSoup} for
-HTML parsing.
+We implemented a Python 3.12 scanner---\texttt{scanner.py},
+approximately 310 lines---to automate detection of hydration leakage.
+It uses \texttt{requests} for HTTP fetching and \texttt{BeautifulSoup}
+for HTML parsing.
 
 \subsubsection{Extraction Pipeline}
 
-The scanner implements two extraction paths corresponding to the two
-Next.js serialization channels:
+The scanner handles both Next.js serialization channels through
+separate extraction paths:
 
 \begin{enumerate}
   \item \textbf{Pages Router}: BeautifulSoup locates the
@@ -384,40 +396,40 @@ Next.js serialization channels:
         \texttt{r'self\textbackslash .\_\_next\_f\textbackslash
         .push\textbackslash(\textbackslash s*(\textbackslash[
         \textbackslash s\textbackslash S]*?\textbackslash])\textbackslash
-        s*\textbackslash)'} finds all RSC push calls in the HTML.  Each
-        matched payload is parsed, the row type inspected, and row-type-1
-        payloads further split by newline and parsed as individual JSON
-        objects.  All recovered objects are collected into a list for
-        further analysis.
+        s*\textbackslash)'} locates all RSC push calls in the HTML.
+        Each matched payload is parsed, the row type inspected, and
+        row-type-1 payloads further split by newline and parsed as
+        individual JSON objects.  All recovered objects are collected
+        into a list for further analysis.
 \end{enumerate}
 
 \subsubsection{Recursive Tree Walker}
 
-Once JSON data is recovered from either channel, the scanner recursively
-walks the Python object graph.  At each dictionary key, two independent
-checks run:
+Once JSON data is recovered from either channel, the scanner walks the
+Python object graph recursively.  At each dictionary key, two
+independent checks run:
 
 \begin{enumerate}
   \item \textbf{Field-name pattern matching}: The key is tested against
         29 compiled regular expressions organised into three severity
-        tiers.  The patterns are ordered from most specific to most
-        general (e.g., \texttt{password\_hash} before
-        \texttt{password}) to ensure the most descriptive label is
-        assigned when a key matches multiple patterns.  The first matching
-        pattern wins; a \texttt{set} of already-flagged paths is
-        maintained across the recursion to prevent duplicate findings.
+        tiers.  Patterns are ordered from most specific to most
+        general---\texttt{password\_hash} before \texttt{password},
+        for instance---so the most descriptive label is assigned when
+        a key matches multiple patterns.  The first match wins; a
+        \texttt{set} of already-flagged paths is maintained across the
+        recursion to prevent duplicate findings.
 
-  \item \textbf{Value pattern matching}: If the field was not flagged by
-        a name pattern and its value is a string, the value is tested
-        against eight compiled value-format regular expressions covering
-        bcrypt hashes, Stripe-format API keys, SSN format, JWTs, GitHub
-        personal access tokens, AWS access key IDs, Base32 strings
-        (potential TOTP secrets), and 13--16-digit numeric sequences
-        (potential credit card numbers).
+  \item \textbf{Value pattern matching}: If a field was not flagged by
+        a name pattern and its value is a string, that value is tested
+        against eight compiled format-pattern regular expressions
+        covering bcrypt hashes, Stripe-format API keys, SSN format,
+        JWTs, GitHub personal access tokens, AWS access key IDs,
+        Base32 strings (potential TOTP secrets), and 13--16-digit
+        numeric sequences (potential credit card numbers).
 \end{enumerate}
 
-Table~\ref{tab:patterns} summarises the field-name pattern coverage by
-severity tier.
+Table~\ref{tab:patterns} shows the field-name pattern coverage broken
+down by severity tier.
 
 \begin{table}[H]
   \caption{Scanner field-name patterns by severity tier.}
@@ -455,12 +467,11 @@ severity tier.
 
 \subsubsection{Findings Store}
 
-Every scan run is automatically persisted to a \texttt{findings/}
+Each scan run is persisted automatically to a \texttt{findings/}
 directory as a timestamped JSON file.  A \texttt{findings/index.json}
-catalog is maintained and updated after each run, recording the
-timestamp, user-supplied label, target count, and per-severity finding
-counts.  This enables longitudinal comparison across scan runs, as
-exploited in Section~\ref{sec:results}.
+catalog records the timestamp, label, target count, and per-severity
+totals for every run.  This makes longitudinal comparison across runs
+straightforward, as exploited in Section~\ref{sec:results}.
 
 % ─────────────────────────────────────────────────────────────
 \section{Results}
@@ -496,12 +507,13 @@ produced the results in Table~\ref{tab:results_vuln}.
     Section~\ref{sec:discussion}).}
 \end{table}
 
-The 24 confirmed CRITICAL findings decompose exactly as expected: four
-sensitive fields (\texttt{password\_hash}, \texttt{api\_key},
-\texttt{ssn}, \texttt{two\_factor\_secret}) per user, across three users,
-across two routes ($4 \times 3 \times 2 = 24$).  Every finding was
-confirmed by manual inspection of the raw HTML.  Listing~\ref{lst:finding}
-shows a representative scanner output entry.
+The 24 confirmed CRITICAL findings break down exactly as the schema
+predicts: four sensitive fields (\texttt{password\_hash},
+\texttt{api\_key}, \texttt{ssn}, \texttt{two\_factor\_secret}) per
+user, three users, two routes ($4 \times 3 \times 2 = 24$).  Each
+finding was verified by hand against the raw HTML.
+Listing~\ref{lst:finding} shows a representative entry from the
+scanner's JSON output.
 
 \begin{lstlisting}[style=json, caption={Representative CRITICAL finding
   from the scanner JSON report.}, label={lst:finding}]
@@ -516,16 +528,15 @@ shows a representative scanner output entry.
 }
 \end{lstlisting}
 
-The dot-notation \texttt{field\_path} precisely locates each leaked field
-within the serialized JSON tree, providing actionable remediation
-information to a developer.
+The dot-notation \texttt{field\_path} pinpoints the leaked field within
+the serialized JSON tree, giving a developer a precise location to
+address.
 
 \subsection{Post-Mitigation Scan: Secure Routes}
 
-After implementing the DTO mitigation described in
-Section~\ref{sec:mitigation}, the scanner was run against both the
-vulnerable and the mitigated routes simultaneously
-(Table~\ref{tab:results_comparison}).
+With the DTO mitigation from Section~\ref{sec:mitigation} applied, the
+scanner was run against all four routes simultaneously.
+Table~\ref{tab:results_comparison} shows the comparison.
 
 \begin{table}[H]
   \caption{Scanner findings before and after DTO mitigation.}
@@ -550,11 +561,11 @@ vulnerable and the mitigated routes simultaneously
     between routes.}
 \end{table}
 
-The DTO mitigation eliminated 100\% of confirmed CRITICAL findings.  The
-zero-finding result on the mitigated routes was further validated by
-direct inspection of the HTML source: no \texttt{password\_hash},
+The DTO mitigation eliminated 100\% of confirmed CRITICAL findings.
+To verify the zero-finding result independently, the HTML source of
+both mitigated routes was inspected manually: no \texttt{password\_hash},
 \texttt{api\_key}, \texttt{ssn}, or \texttt{two\_factor\_secret} field
-appeared anywhere in the response payload.
+appeared anywhere in either response payload.
 
 % ─────────────────────────────────────────────────────────────
 \section{Mitigation: The Data Transfer Object Pattern}
@@ -562,10 +573,11 @@ appeared anywhere in the response payload.
 
 \subsection{Design Rationale}
 
-The root cause of hydration leakage is the absence of an explicit
-boundary between the server's internal data representation and the data
-contract exposed to clients.  Two approaches to enforcing such a boundary
-are possible:
+Hydration leakage stems from a missing boundary.  The server's internal
+data representation---a full database record---reaches the client
+unchanged because nothing compels a developer to distinguish between
+``data I fetched'' and ``data the client is permitted to see.''  Two
+strategies can enforce that distinction:
 
 \begin{enumerate}
   \item \textbf{Blocklist (field deletion)}: After fetching, explicitly
@@ -573,23 +585,24 @@ are possible:
         \texttt{delete user.password\_hash}.
 
   \item \textbf{Allowlist (DTO projection)}: Define a separate type
-        containing only the fields that are permitted to cross the
-        boundary, and construct instances of that type from the database
-        records.
+        containing only the fields permitted to cross the boundary, and
+        construct instances of that type from the database records.
 \end{enumerate}
 
-We adopt and recommend the \emph{allowlist} approach.  A blocklist is
-\emph{open by default}---when a new sensitive column is added to the
-database schema, it leaks to clients until a developer remembers to add
-it to the deletion list.  An allowlist is \emph{closed by default}---new
-fields are invisible to clients until explicitly declared in the DTO, and
-the TypeScript type system enforces this at compile time.
+The \emph{allowlist} approach is the right choice.  A blocklist is
+\emph{open by default}---add a sensitive column to the database schema
+and it leaks to clients until someone remembers to patch the deletion
+list.  An allowlist is \emph{closed by default}---new fields simply do
+not exist from the client's perspective until deliberately added to the
+DTO.  The TypeScript type system can enforce this at compile time,
+making a violation a build error rather than a silent runtime leak.
 
 \subsection{Implementation}
 
-We defined a \texttt{PublicUser} DTO interface in
-\texttt{src/lib/dto.ts} containing only the five fields appropriate for
-client consumption.  Listing~\ref{lst:dto} shows the full implementation.
+A \texttt{PublicUser} DTO interface was defined in
+\texttt{src/lib/dto.ts}, holding only the five fields appropriate for
+client consumption.  Listing~\ref{lst:dto} shows the full
+implementation.
 
 \begin{lstlisting}[style=typescript, caption={DTO definition and
   transformation function in \texttt{src/lib/dto.ts}.},
@@ -617,17 +630,18 @@ export const toPublicUsers = (users: User[]): PublicUser[] =>
   users.map(toPublicUser);
 \end{lstlisting}
 
-The explicit destructuring in \texttt{toPublicUser} ensures that
-TypeScript enforces the shape at compile time: any field not listed in
-the return literal is structurally excluded.  Furthermore, because Client
-Components in the secure route accept \texttt{PublicUser[]} rather than
-\texttt{User[]}, any accidental reference to \texttt{user.password\_hash}
-within client code is a compile-time type error, not a runtime leak.
+The explicit destructuring inside \texttt{toPublicUser} is
+load-bearing.  TypeScript's structural type check ensures that any
+field absent from the return literal is excluded from the output type.
+Client Components that accept \texttt{PublicUser[]} rather than
+\texttt{User[]} gain a further safety layer: referencing
+\texttt{user.password\_hash} inside client code is a compile-time type
+error, not a runtime leak.
 
 \subsubsection{Pages Router Integration}
 
-The secure Pages Router page \texttt{/secure-pages} applies
-\texttt{toPublicUsers} before returning props:
+The secure Pages Router page, \texttt{/secure-pages}, wraps the
+database result with \texttt{toPublicUsers} before returning props:
 
 \begin{lstlisting}[style=typescript, caption={DTO-secured
   \texttt{getServerSideProps}.}, label={lst:secure_pages}]
@@ -638,13 +652,13 @@ export const getServerSideProps: GetServerSideProps<Props> =
   };
 \end{lstlisting}
 
-Only the \texttt{PublicUser} shape now enters the
+Only the \texttt{PublicUser} shape enters the
 \texttt{\_\_NEXT\_DATA\_\_} serialization pipeline.
 
 \subsubsection{App Router Integration}
 
-The secure App Router Server Component \texttt{/secure} applies the
-transformation before passing data to the Client Component:
+The secure App Router Server Component, \texttt{/secure}, applies the
+transformation before handing data to the Client Component:
 
 \begin{lstlisting}[style=typescript, caption={DTO-secured
   App Router Server Component.}, label={lst:secure_app}]
@@ -656,16 +670,15 @@ export default async function SecureAppRouterPage() {
 }
 \end{lstlisting}
 
-The RSC serialization boundary only ever observes
-\texttt{PublicUser} objects.  Sensitive fields are removed before they
-can enter the \texttt{self.\_\_next\_f.push} payload.
+The RSC boundary only ever sees \texttt{PublicUser} objects.  Sensitive
+fields are gone before \texttt{self.\_\_next\_f.push} encodes anything.
 
 \subsection{Code Change Footprint}
 
-Table~\ref{tab:changefootprint} quantifies the implementation cost of the
-mitigation.  The DTO module itself requires approximately 20 lines of
-TypeScript.  Each route requires a single one-line change to wrap the
-database result in \texttt{toPublicUsers()}.
+Table~\ref{tab:changefootprint} shows what the mitigation costs in
+code.  The DTO module is roughly 20 lines of TypeScript.  Each route
+requires a single one-line change.  Twenty-two lines in total eliminate
+24 critical findings.
 
 \begin{table}[H]
   \caption{Lines of code changed to apply the DTO mitigation per route.}
@@ -690,123 +703,119 @@ database result in \texttt{toPublicUsers()}.
 
 \subsection{False Positives in the Scanner}
 
-The scanner produced HIGH-severity false positives on all scanned routes,
-arising from two structural properties of the Next.js RSC payload and
-Pages Router data.
+The scanner flagged HIGH-severity findings on every scanned route,
+including the mitigated ones.  All of them are false positives.  They
+arise from two structural properties of the Next.js payload format.
 
 \subsubsection{Base32 Value Pattern}
 
-The scanner's value heuristic for TOTP secrets uses the pattern
-\texttt{\textasciicircum[A-Z2-7]+=*\$}, which matches any string composed
-entirely of Base32 alphabet characters.  Short English words and React
-internal values frequently satisfy this constraint: \texttt{``user''},
-\texttt{``admin''}, \texttt{``flex''}, \texttt{``center''}, \texttt{``en''}
-(the HTML \texttt{lang} attribute), and
-\texttt{``development''} (the Next.js \texttt{buildId}) all match.  These
-are React component tree metadata, HTML attributes, and CSS class names,
-not TOTP secrets.
+The TOTP secret heuristic matches
+\texttt{\textasciicircum[A-Z2-7]+=*\$}---any string drawn entirely from
+the Base32 alphabet.  Short React-internal strings satisfy this
+trivially: \texttt{``user''}, \texttt{``admin''}, \texttt{``flex''},
+\texttt{``center''}, \texttt{``en''} (the HTML \texttt{lang}
+attribute), and \texttt{``development''} (the Next.js \texttt{buildId})
+all match.  None of them are TOTP secrets.  They are component tree
+metadata, HTML attributes, and CSS class names.
 
 \subsubsection{Field Name Substring Matching: \texttt{className}}
 
-React's RSC payload encodes component props as JSON, including the
-\texttt{className} prop used for CSS class assignment.  The field name
-\texttt{className} contains the substring \texttt{ssN}
-(case-insensitively), triggering the scanner's SSN field-name pattern.
-The associated values are Tailwind CSS utility strings such as
-\texttt{``p-8 font-sans''} and Geist font identifier strings, not Social
+React serializes component props into JSON, \texttt{className}
+included.  The field name \texttt{className} contains the substring
+\texttt{ssN} case-insensitively, which triggers the SSN field-name
+pattern.  The associated values are Tailwind CSS utility strings---
+\texttt{``p-8 font-sans''}, Geist font identifiers---not Social
 Security Numbers.
 
 \subsubsection{Mitigating False Positives}
 
-Both false positive classes are structurally distinguishable from genuine
-findings: they occur at paths containing well-known React-internal field
-names (\texttt{className}, \texttt{lang}, \texttt{rel},
-\texttt{parallelRouterKey}, \texttt{style.*}) and are present in both
-vulnerable and mitigated routes equally.  A production-grade scanner
-could eliminate them by maintaining an allowlist of internal RSC field
-names to exclude from pattern matching, or by applying a minimum-length
-filter on value pattern matches.  We leave this refinement to future work.
+Both false positive classes share a structural tell: they appear at
+paths containing well-known React-internal field names
+(\texttt{className}, \texttt{lang}, \texttt{rel},
+\texttt{parallelRouterKey}, \texttt{style.*}), and they appear on
+mitigated and vulnerable routes alike.  A production-grade scanner
+could suppress them through an allowlist of internal RSC field names or
+a minimum-length guard on value matches.  We leave that refinement to
+future work.
 
-Importantly, the false positive rate on CRITICAL findings from genuine
-user-data paths is \textbf{zero}: every CRITICAL finding that references
-a user array path (e.g.,
-\texttt{users[0].password\_hash}) was confirmed to be a true positive.
+The false positive rate on genuine user-data paths is \textbf{zero}.
+Every CRITICAL finding that references a user array path (e.g.,
+\texttt{users[0].password\_hash}) was a confirmed true positive.
 
 \subsection{Scope and Generalizability}
 
-Our proof-of-concept uses a local JSON file as the mock database.
-Production Next.js applications typically use relational or document
-databases via ORMs such as Prisma~\cite{prisma}, which return typed model
-objects with even more fields than our minimal schema.  The hydration
-leakage mechanism is identical; ORMs may in fact \emph{increase} risk by
-returning comprehensive record objects by default.
+The mock database used here is a local JSON file---simpler than
+production.  Real Next.js applications typically use ORMs such as
+Prisma~\cite{prisma} against relational or document databases.  Those
+ORMs return typed model objects that often carry \emph{more} fields
+than the minimal schema used here.  The hydration leakage mechanism is
+unchanged; if anything, ORMs raise the risk by making over-fetching
+the path of least resistance.
 
-The vulnerability is not specific to Next.js.  Any SSR framework that
+The vulnerability is not Next.js-specific.  Any SSR framework that
 serializes server-fetched data into the HTML response and passes it to
-client-side components---including Nuxt 3 (Vue), SvelteKit, Remix, and
-Astro in hybrid mode---is susceptible to the same class of exposure when
+client-side components---Nuxt 3 (Vue), SvelteKit, Remix, and Astro in
+hybrid mode---is susceptible to the same class of exposure when
 developers pass raw database records across the server--client boundary.
-The DTO pattern we describe is framework-agnostic.
+The DTO pattern described here is entirely framework-agnostic.
 
 \subsection{Developer Tooling Gap}
 
-No current build-time or lint-time tooling warns developers when a
-\texttt{getServerSideProps} return value or a Server Component prop
-contains fields that were not declared as intentionally public.
-TypeScript's structural type system cannot distinguish ``this interface
-is a database record'' from ``this interface is a safe DTO''; without
-nominal typing or explicit boundary annotations, the compiler permits
-the leak silently.
+No existing build-time or lint-time tool warns when a
+\texttt{getServerSideProps} return value or Server Component prop
+carries fields never declared as safe for the client.  TypeScript's
+structural type system sees no difference between a database record
+interface and a DTO interface; without nominal typing or explicit
+boundary annotations, the compiler allows the leak through silently.
 
 An ESLint plugin that enforces DTO use at \texttt{getServerSideProps}
 return sites and at RSC-to-Client-Component prop boundaries would close
-this tooling gap.  We propose this as a direction for future work.
+this gap.  We identify that as the most direct direction for follow-on
+work.
 
 % ─────────────────────────────────────────────────────────────
 \section{Conclusion}
 \label{sec:conclusion}
 
-We have demonstrated that the hydration mechanism in Next.js---common to
-both the Pages Router and the App Router---constitutes a latent
-information-disclosure vulnerability when developers pass raw database
-records as component props.  The exposure requires no attacker privilege,
-no network interception, and no browser extension: the data is present in
-the plain-text HTML of every response.
+The hydration mechanism in Next.js---shared by both the Pages Router
+and the App Router---is a latent information-disclosure vulnerability
+when developers pass raw database records as component props.  The
+exposure asks nothing of an attacker.  No elevated privilege.  No
+network interception.  No browser extension.  The data sits in the
+plain-text HTML of every response, waiting.
 
-Our automated scanner confirmed 24 CRITICAL credential exposures across
-two route implementations in our proof-of-concept application.  These
-exposures included bcrypt password hashes, live API keys, Social Security
-Numbers, and TOTP two-factor authentication seeds.  After applying the
-Data Transfer Object mitigation---a structural pattern that allowlists
-permitted fields before they enter the serialization pipeline---the scanner
-confirmed zero CRITICAL findings.  The complete mitigation required
-approximately 22 lines of TypeScript.
+Our scanner confirmed 24 CRITICAL credential exposures across two
+route implementations: bcrypt password hashes, live API keys, Social
+Security Numbers, and TOTP two-factor seeds.  All 24 vanished after
+applying the Data Transfer Object mitigation.  The fix required 22
+lines of TypeScript.
 
-We recommend three practices for Next.js developers and security
-reviewers:
+Three practices follow from this work:
 
 \begin{enumerate}
-  \item \textbf{Adopt the DTO allowlist pattern universally.} Every data
-        access in \texttt{getServerSideProps} and every prop passed from
-        a Server Component to a Client Component should be projected
-        through an explicit DTO before crossing the boundary.
+  \item \textbf{Adopt the DTO allowlist pattern universally.} Every
+        data access in \texttt{getServerSideProps} and every prop
+        passed from a Server Component to a Client Component should be
+        projected through an explicit DTO before crossing the boundary.
 
   \item \textbf{Treat the serialized HTML payload as a public API
-        surface.} Any field that would be inappropriate in a REST
-        response to an unauthenticated caller is also inappropriate in
-        the hydration payload.
+        surface.} Any field inappropriate in a REST response to an
+        unauthenticated caller is equally inappropriate in the
+        hydration payload.
 
   \item \textbf{Include hydration payload review in security audits.}
         Existing scanning tools focus on XSS, injection, and
         authentication bypasses.  Automated checks against
-        \texttt{\_\_NEXT\_DATA\_\_} and RSC push payloads should be added
-        to standard web-application security assessment methodology.
+        \texttt{\_\_NEXT\_DATA\_\_} and RSC push payloads should be
+        added to standard web-application security assessment
+        methodology.
 \end{enumerate}
 
-As React-based SSR frameworks continue to proliferate and become the
-default choice for full-stack web development, the boundary between
-server-side data and client-side rendering deserves the same rigorous
-security scrutiny historically applied to API design.
+SSR frameworks are the default now, and they will remain so.  As that
+architectural dominance deepens, the boundary between server-side data
+and client-side rendering must receive the same security scrutiny
+historically applied to API design---because in a hydrated application,
+that boundary \emph{is} the API.
 
 % ─────────────────────────────────────────────────────────────
 \bibliographystyle{splncs04}
