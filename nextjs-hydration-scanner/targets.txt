@@ -1,0 +1,16 @@
+# Next.js Hydration Scanner — Target URLs
+# One URL per line. Lines starting with # are ignored.
+
+# --- Vulnerable PoC ---
+# Pages Router: leaks via __NEXT_DATA__
+http://localhost:3001/vulnerable-pages
+
+# App Router: leaks via RSC payload
+http://localhost:3001/vulnerable
+
+# --- Mitigated (Phase 3 — DTO pattern) ---
+# Pages Router: DTO-stripped props
+http://localhost:3001/secure-pages
+
+# App Router: DTO-stripped before RSC boundary
+http://localhost:3001/secure

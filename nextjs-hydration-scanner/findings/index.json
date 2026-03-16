@@ -1,0 +1,62 @@
+[
+  {
+    "file": "2026-03-16T18-03-20_vulnerable-baseline.json",
+    "scanned_at": "2026-03-16T12:33:20.616286+00:00",
+    "label": "vulnerable-baseline",
+    "targets_scanned": 2,
+    "total_findings": 73,
+    "critical": 29,
+    "high": 44,
+    "medium": 0,
+    "urls": [
+      "http://localhost:3001/vulnerable-pages",
+      "http://localhost:3001/vulnerable"
+    ]
+  },
+  {
+    "file": "2026-03-16T12-36-56_vulnerable-phase2.json",
+    "scanned_at": "2026-03-16T12:36:56.518649+00:00",
+    "label": "vulnerable-phase2",
+    "targets_scanned": 2,
+    "total_findings": 73,
+    "critical": 29,
+    "high": 44,
+    "medium": 0,
+    "urls": [
+      "http://localhost:3001/vulnerable-pages",
+      "http://localhost:3001/vulnerable"
+    ]
+  },
+  {
+    "file": "2026-03-16T12-41-11_phase3-before-after.json",
+    "scanned_at": "2026-03-16T12:41:11.540217+00:00",
+    "label": "phase3-before-after",
+    "targets_scanned": 4,
+    "total_findings": 117,
+    "critical": 33,
+    "high": 84,
+    "medium": 0,
+    "urls": [
+      "http://localhost:3001/vulnerable-pages",
+      "http://localhost:3001/vulnerable",
+      "http://localhost:3001/secure-pages",
+      "http://localhost:3001/secure"
+    ]
+  },
+  {
+    "file": "2026-03-16T12-49-00_post-cleanup.json",
+    "scanned_at": "2026-03-16T12:49:00.105028+00:00",
+    "label": "post-cleanup",
+    "targets_scanned": 4,
+    "total_findings": 117,
+    "critical": 33,
+    "high": 84,
+    "medium": 0,
+    "urls": [
+      "http://localhost:3001/vulnerable-pages",
+      "http://localhost:3001/vulnerable",
+      "http://localhost:3001/secure-pages",
+      "http://localhost:3001/secure"
+    ]
+  }
+]

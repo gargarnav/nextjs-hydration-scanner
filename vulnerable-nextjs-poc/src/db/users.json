@@ -1,0 +1,35 @@
+[
+  {
+    "id": 1,
+    "name": "Alice Admin",
+    "email": "alice@example.com",
+    "password_hash": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjIQqiRQYq",
+    "two_factor_secret": "JBSWY3DPEHPK3PXP",
+    "api_key": "sk_live_1234567890abcdef",
+    "ssn": "000-00-0001",
+    "role": "admin",
+    "created_at": "2023-01-15T08:30:00Z"
+  },
+  {
+    "id": 2,
+    "name": "Bob Builder",
+    "email": "bob@example.com",
+    "password_hash": "$2b$12$A.7u.o/0z9c12b7uA.7u.o/0z9c12b7uA.7u.o/0z9c12b7u",
+    "two_factor_secret": "KRSXG5CTPBWWC2LNNPZZM2TMIU======",
+    "api_key": "sk_live_abcdef1234567890",
+    "ssn": "000-00-0002",
+    "role": "user",
+    "created_at": "2023-02-20T14:45:00Z"
+  },
+  {
+    "id": 3,
+    "name": "Charlie Chapman",
+    "email": "charlie@example.com",
+    "password_hash": "$2b$12$B.8v.p/1z0d23c8vB.8v.p/1z0d23c8vB.8v.p/1z0d23c8v",
+    "two_factor_secret": "MZXW6YTBOI======",
+    "api_key": "sk_live_9876543210fedcba",
+    "ssn": "000-00-0003",
+    "role": "user",
+    "created_at": "2023-03-05T09:15:00Z"
+  }
+]

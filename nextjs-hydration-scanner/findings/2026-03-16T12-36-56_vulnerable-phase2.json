@@ -1,0 +1,703 @@
+{
+  "scanner": "nextjs-hydration-scanner",
+  "version": "1.0.0",
+  "paper": "Hydration Leakage and Over-fetching in Next.js (CAIS-2026)",
+  "generated_at": "2026-03-16T12:36:56.518649+00:00",
+  "summary": {
+    "targets_scanned": 2,
+    "targets_with_findings": 2,
+    "total_findings": 73,
+    "critical": 29,
+    "high": 44,
+    "medium": 0
+  },
+  "results": [
+    {
+      "url": "http://localhost:3001/vulnerable-pages",
+      "scanned_at": "2026-03-16T12:36:55.948379+00:00",
+      "status": "ok",
+      "error": null,
+      "pages_router_found": true,
+      "app_router_found": false,
+      "finding_counts": {
+        "critical": 12,
+        "high": 4,
+        "medium": 0
+      },
+      "findings": [
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[0].password_hash",
+          "field_name": "password_hash",
+          "value_preview": "$2b$12...RQYq  [60 chars]",
+          "reason": "Password field \u2014 field name matches pattern /password/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[0].two_factor_secret",
+          "field_name": "two_factor_secret",
+          "value_preview": "JBSWY3...3PXP  [16 chars]",
+          "reason": "Secret / key material \u2014 field name matches pattern /secret/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[0].api_key",
+          "field_name": "api_key",
+          "value_preview": "sk_liv...cdef  [24 chars]",
+          "reason": "API key \u2014 field name matches pattern /api_key/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[0].ssn",
+          "field_name": "ssn",
+          "value_preview": "000-*******",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[0].role",
+          "field_name": "role",
+          "value_preview": "admi*",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "__NEXT_DATA__",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[1].password_hash",
+          "field_name": "password_hash",
+          "value_preview": "$2b$12...2b7u  [55 chars]",
+          "reason": "Password field \u2014 field name matches pattern /password/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[1].two_factor_secret",
+          "field_name": "two_factor_secret",
+          "value_preview": "KRSXG5...====  [32 chars]",
+          "reason": "Secret / key material \u2014 field name matches pattern /secret/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[1].api_key",
+          "field_name": "api_key",
+          "value_preview": "sk_liv...7890  [24 chars]",
+          "reason": "API key \u2014 field name matches pattern /api_key/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[1].ssn",
+          "field_name": "ssn",
+          "value_preview": "000-*******",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[1].role",
+          "field_name": "role",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "__NEXT_DATA__",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[2].password_hash",
+          "field_name": "password_hash",
+          "value_preview": "$2b$12...3c8v  [55 chars]",
+          "reason": "Password field \u2014 field name matches pattern /password/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[2].two_factor_secret",
+          "field_name": "two_factor_secret",
+          "value_preview": "MZXW6Y...====  [16 chars]",
+          "reason": "Secret / key material \u2014 field name matches pattern /secret/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[2].api_key",
+          "field_name": "api_key",
+          "value_preview": "sk_liv...dcba  [24 chars]",
+          "reason": "API key \u2014 field name matches pattern /api_key/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[2].ssn",
+          "field_name": "ssn",
+          "value_preview": "000-*******",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "__NEXT_DATA__",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "__NEXT_DATA__.props.pageProps.users[2].role",
+          "field_name": "role",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "__NEXT_DATA__",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "__NEXT_DATA__.buildId",
+          "field_name": "buildId",
+          "value_preview": "deve*******",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "__NEXT_DATA__",
+          "match_type": "value_pattern"
+        }
+      ]
+    },
+    {
+      "url": "http://localhost:3001/vulnerable",
+      "scanned_at": "2026-03-16T12:36:56.471550+00:00",
+      "status": "ok",
+      "error": null,
+      "pages_router_found": false,
+      "app_router_found": true,
+      "finding_counts": {
+        "critical": 17,
+        "high": 40,
+        "medium": 0
+      },
+      "findings": [
+        {
+          "field_path": "RSC[5].name",
+          "field_name": "name",
+          "value_preview": "Prel****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[5].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[14].parallelRouterKey",
+          "field_name": "parallelRouterKey",
+          "value_preview": "chil****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[15].name",
+          "field_name": "name",
+          "value_preview": "Root******",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[15].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[21].name",
+          "field_name": "name",
+          "value_preview": "NotF****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[21].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[22].name",
+          "field_name": "name",
+          "value_preview": "HTTPAc...back  [23 chars]",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[22].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[37].name",
+          "field_name": "name",
+          "value_preview": "Vulner...Page  [23 chars]",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[37].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[40].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[44].name",
+          "field_name": "name",
+          "value_preview": "NonI****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[44].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[45].name",
+          "field_name": "name",
+          "value_preview": "Viewpo...pper  [15 chars]",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[45].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[47].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[48].name",
+          "field_name": "name",
+          "value_preview": "Metada...pper  [15 chars]",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[48].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[52].env",
+          "field_name": "env",
+          "value_preview": "Serv**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[67][1][3].style.textAlign",
+          "field_name": "textAlign",
+          "value_preview": "cent**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[67][1][3].style.display",
+          "field_name": "display",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[67][1][3].style.flexDirection",
+          "field_name": "flexDirection",
+          "value_preview": "colu**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[67][1][3].style.alignItems",
+          "field_name": "alignItems",
+          "value_preview": "cent**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[67][1][3].style.justifyContent",
+          "field_name": "justifyContent",
+          "value_preview": "cent**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[67][1][3].children[3].children[1][3].className",
+          "field_name": "className",
+          "value_preview": "next-e...r-h1  [13 chars]",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[67][1][3].children[3].children[1][3].style.verticalAlign",
+          "field_name": "verticalAlign",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[68][3].lang",
+          "field_name": "lang",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[68][3].children[3].className",
+          "field_name": "className",
+          "value_preview": "geist_...ased  [96 chars]",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[68][3].children[3].children[3].parallelRouterKey",
+          "field_name": "parallelRouterKey",
+          "value_preview": "chil****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[74].b",
+          "field_name": "b",
+          "value_preview": "deve*******",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[74].f[0][1][0][3].type",
+          "field_name": "type",
+          "value_preview": "layo**",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[74].f[0][1][0][3].children[3].children[0][0][3].rel",
+          "field_name": "rel",
+          "value_preview": "styl******",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[74].f[0][1][1].children[0][3].children[1][3].parallelRouterKey",
+          "field_name": "parallelRouterKey",
+          "value_preview": "chil****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[74].f[0][1][1].children[1].children[0][3].children[0][3].type",
+          "field_name": "type",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[75][3].className",
+          "field_name": "className",
+          "value_preview": "p-8 fo...sans  [13 chars]",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[0][3].className",
+          "field_name": "className",
+          "value_preview": "text-3...-600  [36 chars]",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[1][3].className",
+          "field_name": "className",
+          "value_preview": "mb-8 t...-700  [18 chars]",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[0].password_hash",
+          "field_name": "password_hash",
+          "value_preview": "$$2b$1...RQYq  [61 chars]",
+          "reason": "Password field \u2014 field name matches pattern /password/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[0].two_factor_secret",
+          "field_name": "two_factor_secret",
+          "value_preview": "JBSWY3...3PXP  [16 chars]",
+          "reason": "Secret / key material \u2014 field name matches pattern /secret/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[0].api_key",
+          "field_name": "api_key",
+          "value_preview": "sk_liv...cdef  [24 chars]",
+          "reason": "API key \u2014 field name matches pattern /api_key/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[0].ssn",
+          "field_name": "ssn",
+          "value_preview": "000-*******",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[0].role",
+          "field_name": "role",
+          "value_preview": "admi*",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[1].password_hash",
+          "field_name": "password_hash",
+          "value_preview": "$$2b$1...2b7u  [56 chars]",
+          "reason": "Password field \u2014 field name matches pattern /password/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[1].two_factor_secret",
+          "field_name": "two_factor_secret",
+          "value_preview": "KRSXG5...====  [32 chars]",
+          "reason": "Secret / key material \u2014 field name matches pattern /secret/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[1].api_key",
+          "field_name": "api_key",
+          "value_preview": "sk_liv...7890  [24 chars]",
+          "reason": "API key \u2014 field name matches pattern /api_key/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[1].ssn",
+          "field_name": "ssn",
+          "value_preview": "000-*******",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[1].role",
+          "field_name": "role",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[2].password_hash",
+          "field_name": "password_hash",
+          "value_preview": "$$2b$1...3c8v  [56 chars]",
+          "reason": "Password field \u2014 field name matches pattern /password/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[2].two_factor_secret",
+          "field_name": "two_factor_secret",
+          "value_preview": "MZXW6Y...====  [16 chars]",
+          "reason": "Secret / key material \u2014 field name matches pattern /secret/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[2].api_key",
+          "field_name": "api_key",
+          "value_preview": "sk_liv...dcba  [24 chars]",
+          "reason": "API key \u2014 field name matches pattern /api_key/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[2].ssn",
+          "field_name": "ssn",
+          "value_preview": "000-*******",
+          "reason": "Social Security Number \u2014 field name matches pattern /ssn/i",
+          "severity": "CRITICAL",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "field_name"
+        },
+        {
+          "field_path": "RSC[75][3].children[2][3].users[2].role",
+          "field_name": "role",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[76][1][3].name",
+          "field_name": "name",
+          "value_preview": "view****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[78][1][3].name",
+          "field_name": "name",
+          "value_preview": "desc*******",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[78][2][3].rel",
+          "field_name": "rel",
+          "value_preview": "****",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        },
+        {
+          "field_path": "RSC[78][2][3].sizes",
+          "field_name": "sizes",
+          "value_preview": "256x***",
+          "reason": "Base32 string (possible TOTP secret) \u2014 value matches pattern /^[A-Z2-7]+=*$/",
+          "severity": "HIGH",
+          "channel": "RSC_PAYLOAD",
+          "match_type": "value_pattern"
+        }
+      ]
+    }
+  ]
+}

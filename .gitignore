@@ -1,0 +1,35 @@
+# ── Next.js ──────────────────────────────────────────────────
+vulnerable-nextjs-poc/.next/
+vulnerable-nextjs-poc/node_modules/
+vulnerable-nextjs-poc/tsconfig.tsbuildinfo
+vulnerable-nextjs-poc/package-lock.json
+
+# ── Python scanner ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# ── LaTeX build artefacts ─────────────────────────────────────
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/*.pdf
+
+# ── macOS ─────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+
+# ── Editor ────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
