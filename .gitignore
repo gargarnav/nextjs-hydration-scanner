@@ -7,10 +7,22 @@ vulnerable-nextjs-poc/package-lock.json
 # ── Python scanner ────────────────────────────────────────────
 __pycache__/
 *.py[cod]
-*.pyo
+*$py.class
+*.so
 .venv/
 venv/
 env/
+ENV/
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Scanner output ─────────────────────────────────────────────
+nextjs-hydration-scanner/findings/
+nextjs-hydration-scanner/report.json
+results/
+output/
 
 # ── LaTeX build artefacts ─────────────────────────────────────
 paper/*.aux
