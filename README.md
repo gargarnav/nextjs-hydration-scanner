@@ -60,8 +60,8 @@ This scanner detects these exposures across both Next.js routing architectures:
 ### Installation
 
 ```bash
-git clone https://github.com/gargarnav/next-js_vulnerabilities.git
-cd next-js_vulnerabilities
+git clone https://github.com/gargarnav/nextjs-hydration-scanner.git
+cd nextjs-hydration-scanner
 
 pip install -r requirements.txt
 ```
