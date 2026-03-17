@@ -1,6 +1,6 @@
 """
-nextjs-hydration-scanner  —  Phase 2 Tool
-==========================================
+nextjs-hydration-scanner
+========================
 Automated vulnerability scanner for hydration leakage in Next.js applications.
 
 Targets two serialization channels:
@@ -8,27 +8,34 @@ Targets two serialization channels:
   2. App Router    — self.__next_f.push([...]) RSC streaming payload chunks
 
 For each target URL the scanner:
-  - Fetches the HTML and any RSC payload (via the ?_rsc= header trick)
-  - Extracts and deserialises all Next.js hydration data
-  - Recursively walks the data tree looking for sensitive field names and values
+  - Fetches the HTML and parses any embedded Next.js hydration data
+  - Recursively walks the deserialised data tree searching for sensitive field
+    names and value patterns (credentials, keys, PII)
   - Assigns a severity level (CRITICAL / HIGH / MEDIUM) to each finding
   - Emits a structured JSON report and a human-readable console summary
+  - Auto-saves every run to findings/ and maintains a cumulative index.json
 
 Usage:
-  python scanner.py --urls http://localhost:3000/vulnerable-pages \
-                           http://localhost:3000/vulnerable \
+  python scanner.py --urls http://localhost:3000/vulnerable-pages \\
+                           http://localhost:3000/vulnerable \\
                     --output report.json
 
   Or with a targets file (one URL per line):
-  python scanner.py --targets targets.txt --output report.json
+  python scanner.py --targets targets.txt --output report.json --label my-run
+
+  Enable verbose logging:
+  python scanner.py --urls http://localhost:3000/ --verbose
 """
+
+from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 import time
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -37,51 +44,70 @@ import requests
 from bs4 import BeautifulSoup
 
 # ---------------------------------------------------------------------------
+# Logging configuration
+# ---------------------------------------------------------------------------
+# The root logger is configured in main(); this module-level logger inherits
+# its level and handlers at runtime so that library imports stay silent.
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
 # Findings store — auto-saves every run to findings/ and updates index.json
 # ---------------------------------------------------------------------------
 
 FINDINGS_DIR = Path(__file__).parent / "findings"
 
 
-def _save_to_findings_store(report: dict, label: str | None) -> Path:
-    """
-    Persist a scan report into the findings/ directory.
+def _save_to_findings_store(report: dict[str, Any], label: str | None) -> Path:
+    """Persist a scan report into the findings/ directory and update the index.
 
-    File name: findings/YYYY-MM-DDTHH-MM-SS[_label].json
-    Also updates findings/index.json with a one-line summary of every run.
+    Each invocation writes one timestamped JSON file and appends a one-line
+    summary to findings/index.json so that all historical runs are queryable
+    without loading individual report files.
+
+    File-naming convention: findings/YYYY-MM-DDTHH-MM-SS[_label].json
+
+    Args:
+        report: The complete scan report dict as returned by build_json_report().
+        label:  Optional short string embedded in the output filename to help
+                distinguish runs (e.g. "vulnerable-baseline", "post-patch").
+
+    Returns:
+        The Path of the newly written report file.
     """
     FINDINGS_DIR.mkdir(exist_ok=True)
 
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     slug = f"_{label}" if label else ""
-    report_path = FINDINGS_DIR / f"{ts}{slug}.json"
+    report_path = FINDINGS_DIR / f"{timestamp}{slug}.json"
 
-    with open(report_path, "w") as fh:
+    with open(report_path, "w", encoding="utf-8") as fh:
         json.dump(report, fh, indent=2)
 
-    # --- update index.json ---
+    # Maintain a cumulative index so callers can list all runs at a glance.
     index_path = FINDINGS_DIR / "index.json"
-    index: list[dict] = []
+    index: list[dict[str, Any]] = []
     if index_path.exists():
         try:
-            index = json.loads(index_path.read_text())
+            index = json.loads(index_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
+            # Corrupt index — start fresh rather than propagating bad data.
+            logger.warning("findings/index.json was malformed; rebuilding from scratch.")
             index = []
 
     summary = report.get("summary", {})
     index.append({
-        "file": report_path.name,
-        "scanned_at": report.get("generated_at", ts),
-        "label": label,
+        "file":            report_path.name,
+        "scanned_at":      report.get("generated_at", timestamp),
+        "label":           label,
         "targets_scanned": summary.get("targets_scanned", 0),
-        "total_findings": summary.get("total_findings", 0),
-        "critical": summary.get("critical", 0),
-        "high": summary.get("high", 0),
-        "medium": summary.get("medium", 0),
-        "urls": [r["url"] for r in report.get("results", [])],
+        "total_findings":  summary.get("total_findings", 0),
+        "critical":        summary.get("critical", 0),
+        "high":            summary.get("high", 0),
+        "medium":          summary.get("medium", 0),
+        "urls":            [r["url"] for r in report.get("results", [])],
     })
 
-    with open(index_path, "w") as fh:
+    with open(index_path, "w", encoding="utf-8") as fh:
         json.dump(index, fh, indent=2)
 
     return report_path
@@ -90,63 +116,105 @@ def _save_to_findings_store(report: dict, label: str | None) -> Path:
 # ---------------------------------------------------------------------------
 # Sensitive field-name patterns
 # ---------------------------------------------------------------------------
-# Each entry is (compiled_regex, severity, label).
-# ORDER MATTERS: the first matching pattern wins (break after match).
-# More specific patterns must appear before their substrings.
-#   e.g. "password_hash" before "password", "two_factor_secret" before "secret".
-SENSITIVE_FIELD_PATTERNS: list[tuple[re.Pattern, str, str]] = [
-    # CRITICAL — direct credential / secret material (specific before general)
-    (re.compile(r"password_hash",         re.I), "CRITICAL", "Password hash"),
-    (re.compile(r"hashed_password",       re.I), "CRITICAL", "Password hash"),
-    (re.compile(r"password",              re.I), "CRITICAL", "Password field"),
-    (re.compile(r"passwd",                re.I), "CRITICAL", "Password field"),
-    (re.compile(r"two_factor_secret",     re.I), "CRITICAL", "2FA seed / TOTP secret"),
-    (re.compile(r"totp_secret",           re.I), "CRITICAL", "2FA seed / TOTP secret"),
-    (re.compile(r"otp_secret",            re.I), "CRITICAL", "2FA seed / TOTP secret"),
-    (re.compile(r"private_key",           re.I), "CRITICAL", "Private key"),
-    (re.compile(r"api_key",              re.I), "CRITICAL", "API key"),
-    (re.compile(r"apikey",               re.I), "CRITICAL", "API key"),
-    (re.compile(r"social_security",       re.I), "CRITICAL", "Social Security Number"),
-    (re.compile(r"ssn",                  re.I), "CRITICAL", "Social Security Number"),
-    (re.compile(r"credit_card",           re.I), "CRITICAL", "Credit card number"),
-    (re.compile(r"card_number",           re.I), "CRITICAL", "Credit card number"),
-    (re.compile(r"cvv",                  re.I), "CRITICAL", "CVV / CVC"),
-    # HIGH — tokens and auth material (specific before general)
-    (re.compile(r"access_token",          re.I), "HIGH",     "Access token"),
-    (re.compile(r"refresh_token",         re.I), "HIGH",     "Refresh token"),
-    (re.compile(r"auth_token",            re.I), "HIGH",     "Auth token"),
-    (re.compile(r"session_token",         re.I), "HIGH",     "Session token"),
-    (re.compile(r"\btoken\b",            re.I), "HIGH",     "Token field"),
-    (re.compile(r"jwt",                  re.I), "HIGH",     "JWT"),
-    (re.compile(r"bearer",               re.I), "HIGH",     "Bearer credential"),
-    (re.compile(r"encryption_key",        re.I), "HIGH",     "Encryption key"),
-    (re.compile(r"signing_key",           re.I), "HIGH",     "Signing key"),
-    # MEDIUM — internal / structural data that should not be client-visible
-    # webhook_secret before secret so it gets MEDIUM (not CRITICAL) severity
-    (re.compile(r"webhook_secret",        re.I), "MEDIUM",   "Webhook secret"),
-    (re.compile(r"secret",               re.I), "CRITICAL", "Secret / key material"),
-    (re.compile(r"internal_id",           re.I), "MEDIUM",   "Internal identifier"),
-    (re.compile(r"is_admin",             re.I), "MEDIUM",   "Admin flag"),
-    (re.compile(r"admin",                re.I), "MEDIUM",   "Admin flag / role"),
-    (re.compile(r"stripe_customer",       re.I), "MEDIUM",   "Stripe customer ID"),
+# Each entry is (compiled_regex, severity, human_readable_label).
+#
+# ORDERING IS CRITICAL: the list is scanned top-to-bottom and the first match
+# wins (break after match).  More specific patterns must precede their
+# substrings, e.g.:
+#   "password_hash" before "password"  — avoids mis-labelling a hash as a
+#                                        generic "Password field"
+#   "two_factor_secret" before "secret" — preserves a more descriptive label
+#   "webhook_secret" before "secret"   — webhook secrets are MEDIUM, not CRITICAL
+SENSITIVE_FIELD_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
+    # ── CRITICAL: direct credential / secret material ─────────────────────
+    # Hash fields before generic "password" to get the more precise label.
+    (re.compile(r"password_hash",     re.I), "CRITICAL", "Password hash"),
+    (re.compile(r"hashed_password",   re.I), "CRITICAL", "Password hash"),
+    (re.compile(r"password",          re.I), "CRITICAL", "Password field"),
+    (re.compile(r"passwd",            re.I), "CRITICAL", "Password field"),
+    # TOTP seed fields — must precede the generic "secret" entry below.
+    (re.compile(r"two_factor_secret", re.I), "CRITICAL", "2FA seed / TOTP secret"),
+    (re.compile(r"totp_secret",       re.I), "CRITICAL", "2FA seed / TOTP secret"),
+    (re.compile(r"otp_secret",        re.I), "CRITICAL", "2FA seed / TOTP secret"),
+    (re.compile(r"private_key",       re.I), "CRITICAL", "Private key"),
+    (re.compile(r"api_key",           re.I), "CRITICAL", "API key"),
+    (re.compile(r"apikey",            re.I), "CRITICAL", "API key"),
+    (re.compile(r"social_security",   re.I), "CRITICAL", "Social Security Number"),
+    (re.compile(r"ssn",               re.I), "CRITICAL", "Social Security Number"),
+    (re.compile(r"credit_card",       re.I), "CRITICAL", "Credit card number"),
+    (re.compile(r"card_number",       re.I), "CRITICAL", "Credit card number"),
+    (re.compile(r"cvv",               re.I), "CRITICAL", "CVV / CVC"),
+    # ── HIGH: tokens and auth material ────────────────────────────────────
+    # Specific token types precede the generic "\btoken\b" catch-all.
+    (re.compile(r"access_token",      re.I), "HIGH",     "Access token"),
+    (re.compile(r"refresh_token",     re.I), "HIGH",     "Refresh token"),
+    (re.compile(r"auth_token",        re.I), "HIGH",     "Auth token"),
+    (re.compile(r"session_token",     re.I), "HIGH",     "Session token"),
+    (re.compile(r"\btoken\b",         re.I), "HIGH",     "Token field"),
+    (re.compile(r"jwt",               re.I), "HIGH",     "JWT"),
+    (re.compile(r"bearer",            re.I), "HIGH",     "Bearer credential"),
+    (re.compile(r"encryption_key",    re.I), "HIGH",     "Encryption key"),
+    (re.compile(r"signing_key",       re.I), "HIGH",     "Signing key"),
+    # ── MEDIUM: internal / structural data that should not be client-visible
+    # "webhook_secret" listed *before* the generic "secret" so it gets MEDIUM.
+    (re.compile(r"webhook_secret",    re.I), "MEDIUM",   "Webhook secret"),
+    (re.compile(r"secret",            re.I), "CRITICAL", "Secret / key material"),
+    (re.compile(r"internal_id",       re.I), "MEDIUM",   "Internal identifier"),
+    (re.compile(r"is_admin",          re.I), "MEDIUM",   "Admin flag"),
+    (re.compile(r"admin",             re.I), "MEDIUM",   "Admin flag / role"),
+    (re.compile(r"stripe_customer",   re.I), "MEDIUM",   "Stripe customer ID"),
 ]
 
 # ---------------------------------------------------------------------------
-# Sensitive value patterns (regex against the *value* string)
+# Sensitive value patterns (matched against the string *value*, not the key)
 # ---------------------------------------------------------------------------
-SENSITIVE_VALUE_PATTERNS: list[tuple[re.Pattern, str, str]] = [
-    (re.compile(r"^\$2[aby]\$\d+\$.{53}$"),                              "CRITICAL", "Bcrypt hash"),
-    (re.compile(r"^sk_(live|test)_[A-Za-z0-9]{16,}$"),                  "CRITICAL", "Stripe-style live API key"),
-    (re.compile(r"^\d{3}-\d{2}-\d{4}$"),                                "CRITICAL", "SSN (XXX-XX-XXXX format)"),
-    (re.compile(r"ghp_[A-Za-z0-9]{36}"),                                 "CRITICAL", "GitHub Personal Access Token"),
-    (re.compile(r"AKIA[0-9A-Z]{16}"),                                   "CRITICAL", "AWS Access Key ID"),
-    (re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"), "HIGH",     "JWT token"),
-    (re.compile(r"^[0-9]{13,16}$"),                                     "HIGH",     "Possible credit card number"),
-    (re.compile(r"^[A-Z2-7]+=*$",                           re.I),      "HIGH",     "Base32 string (possible TOTP secret)"),
+# These patterns catch credentials that have been stored under innocuous field
+# names (e.g. a bcrypt hash stored in a field called "data").  Each entry is
+# (compiled_regex, severity, human_readable_label).
+SENSITIVE_VALUE_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
+    # Bcrypt hashes begin with $2a$, $2b$, or $2y$ followed by a cost factor
+    # and exactly 53 characters of base-64 encoded salt+digest.
+    (re.compile(r"^\$2[aby]\$\d+\$.{53}$"),
+     "CRITICAL", "Bcrypt hash"),
+
+    # Stripe live/test secret keys: sk_live_… or sk_test_… + ≥16 alnum chars.
+    (re.compile(r"^sk_(live|test)_[A-Za-z0-9]{16,}$"),
+     "CRITICAL", "Stripe-style live API key"),
+
+    # US Social Security Numbers in canonical XXX-XX-XXXX format.
+    (re.compile(r"^\d{3}-\d{2}-\d{4}$"),
+     "CRITICAL", "SSN (XXX-XX-XXXX format)"),
+
+    # GitHub Personal Access Tokens (classic format: ghp_ prefix + 36 chars).
+    (re.compile(r"ghp_[A-Za-z0-9]{36}"),
+     "CRITICAL", "GitHub Personal Access Token"),
+
+    # AWS Access Key IDs always start with AKIA followed by 16 uppercase chars.
+    (re.compile(r"AKIA[0-9A-Z]{16}"),
+     "CRITICAL", "AWS Access Key ID"),
+
+    # JWTs: three base64url segments separated by dots, beginning with "eyJ"
+    # (the base64url encoding of '{"').
+    (re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"),
+     "HIGH",     "JWT token"),
+
+    # Numeric strings in the 13–16 digit range overlap with PAN (payment card)
+    # numbers.  Flag HIGH since false positives are possible (e.g. timestamps).
+    (re.compile(r"^[0-9]{13,16}$"),
+     "HIGH",     "Possible credit card number"),
+
+    # Base32 alphabet (A-Z, 2-7) with optional padding matches TOTP secrets
+    # stored as RFC-4648 Base32.  Case-insensitive to catch lower-case variants.
+    (re.compile(r"^[A-Z2-7]+=*$", re.I),
+     "HIGH",     "Base32 string (possible TOTP secret)"),
 ]
 
-# Module-level compiled regex for RSC payload extraction (avoids recompilation per URL)
-_RSC_PUSH_RE = re.compile(
+# Pre-compiled regex for RSC payload extraction.
+# Matches the inline script pattern Next.js App Router uses to stream React
+# Server Component data: self.__next_f.push([<row_type>, <data>])
+# The [\s\S]*? (non-greedy dot-all) captures multi-line array literals without
+# over-matching into adjacent push() calls.
+_RSC_PUSH_RE: re.Pattern[str] = re.compile(
     r'self\.__next_f\.push\(\s*(\[[\s\S]*?\])\s*\)',
     re.MULTILINE,
 )
@@ -155,40 +223,83 @@ _RSC_PUSH_RE = re.compile(
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Finding:
-    field_path: str    # dot-notation path inside the JSON tree
-    field_name: str    # last key segment
-    value_preview: str # redacted preview of value
-    reason: str        # human-readable description of why it flagged
-    severity: str      # CRITICAL | HIGH | MEDIUM
-    channel: str       # "__NEXT_DATA__" | "RSC_PAYLOAD"
-    match_type: str    # "field_name" | "value_pattern"
+    """A single detected credential or sensitive-data exposure.
+
+    Attributes:
+        field_path:    Dot-notation path to the field within the JSON tree
+                       (e.g. "__NEXT_DATA__.props.pageProps.user.password").
+        field_name:    The bare key name at the leaf (e.g. "password").
+        value_preview: A redacted, truncated preview of the exposed value.
+                       Never contains the full secret.
+        reason:        Human-readable explanation of why the field was flagged
+                       (pattern matched, value format, etc.).
+        severity:      One of "CRITICAL", "HIGH", or "MEDIUM".
+        channel:       Data channel where the exposure was found:
+                       "__NEXT_DATA__" (Pages Router) or "RSC_PAYLOAD" (App Router).
+        match_type:    Whether the finding was triggered by the field name
+                       ("field_name") or the value's format ("value_pattern").
+    """
+
+    field_path:    str
+    field_name:    str
+    value_preview: str
+    reason:        str
+    severity:      str
+    channel:       str
+    match_type:    str
 
 
 @dataclass
 class TargetResult:
-    url: str
-    scanned_at: str
-    status: Literal["ok", "error", "no_payload"]
-    error: str | None
+    """Aggregated scan outcome for a single target URL.
+
+    Attributes:
+        url:                The URL that was scanned.
+        scanned_at:         ISO-8601 timestamp of when the HTTP request was initiated.
+        status:             "ok" — payload found and analysed;
+                            "no_payload" — no Next.js hydration data detected;
+                            "error" — HTTP fetch failed.
+        error:              Error message string when status is "error", else None.
+        pages_router_found: True if a __NEXT_DATA__ script tag was present.
+        app_router_found:   True if RSC self.__next_f.push() chunks were present.
+        findings:           List of Finding instances discovered during the scan.
+    """
+
+    url:                str
+    scanned_at:         str
+    status:             Literal["ok", "error", "no_payload"]
+    error:              str | None
     pages_router_found: bool
-    app_router_found: bool
-    findings: list[Finding] = field(default_factory=list)
+    app_router_found:   bool
+    findings:           list[Finding] = field(default_factory=list)
 
     def _count(self, severity: str) -> int:
+        """Return the number of findings with the given severity level.
+
+        Args:
+            severity: One of "CRITICAL", "HIGH", or "MEDIUM".
+
+        Returns:
+            Count of matching findings.
+        """
         return sum(1 for f in self.findings if f.severity == severity)
 
     @property
     def critical_count(self) -> int:
+        """Number of CRITICAL-severity findings."""
         return self._count("CRITICAL")
 
     @property
     def high_count(self) -> int:
+        """Number of HIGH-severity findings."""
         return self._count("HIGH")
 
     @property
     def medium_count(self) -> int:
+        """Number of MEDIUM-severity findings."""
         return self._count("MEDIUM")
 
 
@@ -196,12 +307,26 @@ class TargetResult:
 # Core scanning logic
 # ---------------------------------------------------------------------------
 
+
 def _value_preview(value: Any) -> str:
-    """Return a safe, truncated preview of a value (never full secrets in reports)."""
-    s = str(value)
-    if len(s) <= 12:
-        return s[:4] + "*" * (len(s) - 4) if len(s) > 4 else "****"
-    return s[:6] + "..." + s[-4:] + f"  [{len(s)} chars]"
+    """Generate a redacted, truncated preview of a potentially sensitive value.
+
+    The preview intentionally never exposes more than a few characters of the
+    original value so that report files can be shared without leaking secrets.
+
+    Args:
+        value: The raw value associated with a sensitive field.
+
+    Returns:
+        A redacted string, e.g. "pass**  [8 chars]" or "ab12...xy89  [32 chars]".
+    """
+    raw = str(value)
+    length = len(raw)
+    if length <= 12:
+        # Short values: keep up to 4 chars then mask the remainder.
+        return raw[:4] + "*" * (length - 4) if length > 4 else "****"
+    # Longer values: show a few chars from each end with length annotation.
+    return f"{raw[:6]}...{raw[-4:]}  [{length} chars]"
 
 
 def _walk(
@@ -209,13 +334,33 @@ def _walk(
     path: str,
     channel: str,
     findings: list[Finding],
-    _field_flagged: set[str] | None = None,  # paths already flagged by field-name; O(1) dedup
+    _field_flagged: set[str] | None = None,
 ) -> None:
-    """
-    Recursively walk a decoded JSON structure.
-    At each dict key, check:
-      1. Does the key name match a sensitive field pattern?
-      2. Does the string value match a sensitive value pattern?
+    """Recursively walk a decoded JSON structure and collect sensitive findings.
+
+    At each dict key the function applies two independent detection strategies:
+
+    1. **Field-name matching**: checks whether the key matches any entry in
+       SENSITIVE_FIELD_PATTERNS.  The first (highest-severity) match wins so
+       that, e.g., "password_hash" is labelled as a hash rather than a plain
+       password field.
+
+    2. **Value-pattern matching**: for string leaf values not already flagged
+       by strategy 1, checks whether the value itself looks like a known
+       credential format (bcrypt hash, JWT, AWS key, etc.) via
+       SENSITIVE_VALUE_PATTERNS.
+
+    The ``_field_flagged`` set is used to prevent double-reporting: once a
+    path has been flagged by field-name matching it is excluded from value-
+    pattern matching at that same path.
+
+    Args:
+        node:           The current node in the JSON tree (any JSON type).
+        path:           Dot-notation path accumulated so far (empty string at root).
+        channel:        Serialization channel label ("__NEXT_DATA__" or "RSC_PAYLOAD").
+        findings:       Mutable list that receives appended Finding objects.
+        _field_flagged: Internal dedup set; initialised on first call, threaded
+                        through all recursive invocations.
     """
     if _field_flagged is None:
         _field_flagged = set()
@@ -224,7 +369,7 @@ def _walk(
         for key, value in node.items():
             current_path = f"{path}.{key}" if path else key
 
-            # --- field name check ---
+            # Strategy 1 — field-name check.
             for pattern, severity, label in SENSITIVE_FIELD_PATTERNS:
                 if pattern.search(key):
                     findings.append(Finding(
@@ -237,9 +382,10 @@ def _walk(
                         match_type="field_name",
                     ))
                     _field_flagged.add(current_path)
-                    break  # first (highest-severity) pattern wins
+                    break  # First (highest-severity) match wins.
 
-            # --- value pattern check (only for string leaves not already flagged) ---
+            # Strategy 2 — value-pattern check (string leaves only, not
+            # already claimed by field-name matching above).
             if isinstance(value, str) and current_path not in _field_flagged:
                 for vpattern, vseverity, vlabel in SENSITIVE_VALUE_PATTERNS:
                     if vpattern.search(value):
@@ -254,15 +400,28 @@ def _walk(
                         ))
                         break
 
+            # Recurse into nested structures regardless of whether this node
+            # was flagged — children may independently contain sensitive data.
             _walk(value, current_path, channel, findings, _field_flagged)
 
     elif isinstance(node, list):
-        for i, item in enumerate(node):
-            _walk(item, f"{path}[{i}]", channel, findings, _field_flagged)
+        for index, item in enumerate(node):
+            _walk(item, f"{path}[{index}]", channel, findings, _field_flagged)
 
 
-def _extract_next_data(html: str) -> dict | None:
-    """Extract and parse the __NEXT_DATA__ JSON blob from Pages Router HTML."""
+def _extract_next_data(html: str) -> dict[str, Any] | None:
+    """Extract and parse the __NEXT_DATA__ JSON blob from Pages Router HTML.
+
+    Next.js Pages Router embeds its serialized server-side props as a JSON
+    object inside a <script id="__NEXT_DATA__" type="application/json"> tag.
+    This function locates that tag, extracts its text content, and parses it.
+
+    Args:
+        html: Raw HTML response body from the target URL.
+
+    Returns:
+        Parsed JSON object as a dict, or None if the tag is absent or unparseable.
+    """
     soup = BeautifulSoup(html, "html.parser")
     tag = soup.find("script", {"id": "__NEXT_DATA__"})
     if not tag or not tag.string:
@@ -270,56 +429,88 @@ def _extract_next_data(html: str) -> dict | None:
     try:
         return json.loads(tag.string)
     except json.JSONDecodeError:
+        logger.debug("__NEXT_DATA__ tag present but contained invalid JSON; skipping.")
         return None
 
 
 def _extract_rsc_payloads(html: str) -> list[Any]:
-    """
-    Extract decoded objects from App Router RSC inline script chunks.
+    """Extract decoded objects from App Router RSC inline script chunks.
 
-    Next.js App Router inlines RSC as:
+    Next.js App Router streams React Server Component data by inlining script
+    tags that call:
+
         self.__next_f.push([<row_type>, <data>])
-    Row type 1 carries the actual React tree JSON as a string.
-    We collect all parseable JSON objects found within these chunks.
-    """
-    results: list[Any] = []
 
-    for m in _RSC_PUSH_RE.finditer(html):
+    Row semantics used by this scanner:
+      - Row type 0: ``data`` is already a Python object after json.loads().
+      - Row type 1: ``data`` is a multi-line string where each line follows the
+                    format ``<row_id>:<json_value>``.  The JSON after the colon
+                    is the actual component payload.
+
+    Lines that are not valid JSON (React element shorthand, binary markers,
+    etc.) are silently skipped.
+
+    Args:
+        html: Raw HTML response body from the target URL.
+
+    Returns:
+        List of all successfully decoded Python objects found within RSC chunks.
+        Empty list if no RSC data is present or all chunks are non-JSON.
+    """
+    decoded_objects: list[Any] = []
+
+    for match in _RSC_PUSH_RE.finditer(html):
         try:
-            chunk = json.loads(m.group(1))
+            chunk = json.loads(match.group(1))
         except json.JSONDecodeError:
+            logger.debug("Skipping RSC chunk — outer array was not valid JSON.")
             continue
 
         if not isinstance(chunk, list) or len(chunk) < 2:
             continue
 
-        row_type, data = chunk[0], chunk[1]
+        row_type: Any = chunk[0]
+        data: Any     = chunk[1]
 
-        # Row type 1 = module / component tree data (string-encoded JSON)
         if row_type == 1 and isinstance(data, str):
+            # Row type 1: multi-line string-encoded payload.
+            # Each line: <row_id>:<json_value>  (colon is the separator)
             for line in data.splitlines():
                 line = line.strip()
                 if not line:
                     continue
-                # Each RSC line is:  <row_id>:<json_value>
                 colon_pos = line.find(":")
                 if colon_pos == -1:
                     continue
+                json_fragment = line[colon_pos + 1:]
                 try:
-                    results.append(json.loads(line[colon_pos + 1:]))
+                    decoded_objects.append(json.loads(json_fragment))
                 except json.JSONDecodeError:
-                    pass  # React element shorthand or non-JSON row; skip
+                    # React element shorthand (e.g. "$L5"), binary row, or
+                    # other non-JSON RSC protocol row type — not an error.
+                    pass
 
-        # Row type 0 = serialized tree (already a Python object after json.loads)
         elif row_type == 0 and isinstance(data, (dict, list)):
-            results.append(data)
+            # Row type 0: serialized tree already deserialised by json.loads().
+            decoded_objects.append(data)
 
-    return results
+    return decoded_objects
 
 
 def _fetch(url: str, timeout: int = 15) -> tuple[str | None, str | None]:
-    """Fetch URL, return (html, error_string)."""
+    """Perform an HTTP GET request and return the response body.
+
+    Args:
+        url:     The target URL to fetch.
+        timeout: Request timeout in seconds (default: 15).
+
+    Returns:
+        A tuple (html, error) where exactly one element is non-None:
+          - On success: (response_text, None)
+          - On failure: (None, error_message_string)
+    """
     headers = {
+        # Identify the scanner in server logs to facilitate responsible disclosure.
         "User-Agent": (
             "NextJS-Hydration-Scanner/1.0 "
             "(Academic Security Research; CAIS-2026)"
@@ -327,51 +518,79 @@ def _fetch(url: str, timeout: int = 15) -> tuple[str | None, str | None]:
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
     try:
-        resp = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        resp.raise_for_status()
-        return resp.text, None
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=timeout,
+            allow_redirects=True,
+        )
+        response.raise_for_status()
+        return response.text, None
     except requests.RequestException as exc:
         return None, str(exc)
 
 
-def scan_url(url: str) -> TargetResult:
-    """Full scan of a single URL. Returns a TargetResult."""
-    # scanned_at records request initiation time, not completion
-    now = datetime.now(timezone.utc).isoformat()
-    html, err = _fetch(url)
+def scan_url(url: str, timeout: int = 15) -> TargetResult:
+    """Perform a full hydration-leakage scan of a single Next.js URL.
 
-    if err:
+    Fetches the page HTML, probes both the Pages Router (__NEXT_DATA__) and
+    App Router (RSC payload) serialization channels, and returns a TargetResult
+    containing all detected sensitive-data findings.
+
+    Args:
+        url:     The fully-qualified URL to scan (including scheme).
+        timeout: HTTP request timeout forwarded to _fetch() (default: 15 s).
+
+    Returns:
+        A TargetResult populated with findings (may be empty) or with
+        status="error" if the HTTP request failed.
+    """
+    # Record request-initiation time so it reflects actual scan time, not
+    # the time at which results are processed.
+    scanned_at = datetime.now(timezone.utc).isoformat()
+    html, error = _fetch(url, timeout=timeout)
+
+    if error:
+        logger.warning("Failed to fetch %s: %s", url, error)
         return TargetResult(
-            url=url, scanned_at=now, status="error", error=err,
-            pages_router_found=False, app_router_found=False,
+            url=url,
+            scanned_at=scanned_at,
+            status="error",
+            error=error,
+            pages_router_found=False,
+            app_router_found=False,
         )
 
     findings: list[Finding] = []
-    pages_found = False
-    app_found = False
+    pages_router_found = False
+    app_router_found   = False
 
-    # --- Channel 1: Pages Router __NEXT_DATA__ ---
+    # ── Channel 1: Pages Router — __NEXT_DATA__ ───────────────────────────
     next_data = _extract_next_data(html)
     if next_data:
-        pages_found = True
+        pages_router_found = True
+        logger.debug("Pages Router payload detected at %s", url)
         _walk(next_data, "__NEXT_DATA__", "__NEXT_DATA__", findings)
 
-    # --- Channel 2: App Router RSC payloads ---
+    # ── Channel 2: App Router — React Server Component payloads ──────────
     rsc_objects = _extract_rsc_payloads(html)
     if rsc_objects:
-        app_found = True
-        for i, obj in enumerate(rsc_objects):
-            _walk(obj, f"RSC[{i}]", "RSC_PAYLOAD", findings)
+        app_router_found = True
+        logger.debug("App Router RSC payload detected at %s (%d objects)", url, len(rsc_objects))
+        for index, obj in enumerate(rsc_objects):
+            _walk(obj, f"RSC[{index}]", "RSC_PAYLOAD", findings)
 
-    status: Literal["ok", "no_payload"] = "no_payload" if (not pages_found and not app_found) else "ok"
+    status: Literal["ok", "no_payload"] = (
+        "no_payload" if not pages_router_found and not app_router_found else "ok"
+    )
 
     return TargetResult(
         url=url,
-        scanned_at=now,
+        scanned_at=scanned_at,
         status=status,
         error=None,
-        pages_router_found=pages_found,
-        app_router_found=app_found,
+        pages_router_found=pages_router_found,
+        app_router_found=app_router_found,
         findings=findings,
     )
 
@@ -380,8 +599,10 @@ def scan_url(url: str) -> TargetResult:
 # Reporting
 # ---------------------------------------------------------------------------
 
-SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2}
-SEVERITY_COLORS = {
+SEVERITY_ORDER: dict[str, int] = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2}
+
+# ANSI escape codes for terminal colorisation.
+SEVERITY_COLORS: dict[str, str] = {
     "CRITICAL": "\033[91m",  # bright red
     "HIGH":     "\033[93m",  # yellow
     "MEDIUM":   "\033[94m",  # blue
@@ -390,10 +611,30 @@ SEVERITY_COLORS = {
 
 
 def _color(text: str, severity: str) -> str:
+    """Wrap text in ANSI color codes appropriate for the given severity level.
+
+    Args:
+        text:     The string to colorize.
+        severity: One of "CRITICAL", "HIGH", or "MEDIUM".
+
+    Returns:
+        The text wrapped in the corresponding ANSI escape sequence, with a
+        reset code appended.  Falls back to plain text for unknown severities.
+    """
     return f"{SEVERITY_COLORS.get(severity, '')}{text}{SEVERITY_COLORS['RESET']}"
 
 
 def print_console_report(results: list[TargetResult]) -> None:
+    """Print a human-readable, ANSI-colorised summary of all scan results.
+
+    The report is written directly to stdout so that it can be piped or
+    redirected independently of the logging stream.  Each target receives a
+    section showing its status, detected channels, finding counts, and
+    individual findings sorted by descending severity.
+
+    Args:
+        results: List of TargetResult objects from one or more scan_url() calls.
+    """
     divider = "=" * 72
 
     print(f"\n{divider}")
@@ -409,25 +650,27 @@ def print_console_report(results: list[TargetResult]) -> None:
             print(f"  Error : {result.error}")
             continue
 
-        channels = []
+        detected_channels: list[str] = []
         if result.pages_router_found:
-            channels.append("Pages Router (__NEXT_DATA__)")
+            detected_channels.append("Pages Router (__NEXT_DATA__)")
         if result.app_router_found:
-            channels.append("App Router (RSC payload)")
-        print(f"  Channels detected: {', '.join(channels) if channels else 'none'}")
-        print(f"  Findings: {result.critical_count} CRITICAL  "
-              f"{result.high_count} HIGH  "
-              f"{result.medium_count} MEDIUM")
+            detected_channels.append("App Router (RSC payload)")
+        print(f"  Channels detected: {', '.join(detected_channels) if detected_channels else 'none'}")
+        print(
+            f"  Findings: {result.critical_count} CRITICAL  "
+            f"{result.high_count} HIGH  "
+            f"{result.medium_count} MEDIUM"
+        )
 
         if not result.findings:
             print("  ✓ No sensitive fields detected in hydration payloads.")
             continue
 
-        for f in sorted(result.findings, key=lambda f: SEVERITY_ORDER.get(f.severity, 99)):
-            print(f"\n    {_color(f'[{f.severity}]', f.severity)}  {f.field_path}")
-            print(f"      Reason  : {f.reason}")
-            print(f"      Channel : {f.channel}")
-            print(f"      Preview : {f.value_preview}")
+        for finding in sorted(result.findings, key=lambda f: SEVERITY_ORDER.get(f.severity, 99)):
+            print(f"\n    {_color(f'[{finding.severity}]', finding.severity)}  {finding.field_path}")
+            print(f"      Reason  : {finding.reason}")
+            print(f"      Channel : {finding.channel}")
+            print(f"      Preview : {finding.value_preview}")
 
     total_findings = sum(len(r.findings) for r in results)
     print(f"\n{divider}")
@@ -435,32 +678,45 @@ def print_console_report(results: list[TargetResult]) -> None:
     print(divider + "\n")
 
 
-def build_json_report(results: list[TargetResult]) -> dict:
+def build_json_report(results: list[TargetResult]) -> dict[str, Any]:
+    """Construct the structured JSON report from scan results.
+
+    Produces a report dict suitable for serialisation to disk, containing
+    scanner metadata, an aggregate summary, and per-target detail including
+    all individual findings.
+
+    Args:
+        results: List of TargetResult objects from one or more scan_url() calls.
+
+    Returns:
+        A dict with keys: scanner, version, paper, generated_at, summary,
+        and results (list of per-target dicts with serialised Finding objects).
+    """
     return {
-        "scanner": "nextjs-hydration-scanner",
-        "version": "1.0.0",
-        "paper": "Hydration Leakage and Over-fetching in Next.js (CAIS-2026)",
+        "scanner":      "nextjs-hydration-scanner",
+        "version":      "1.0.0",
+        "paper":        "Hydration Leakage and Over-fetching in Next.js (CAIS-2026)",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
-            "targets_scanned": len(results),
+            "targets_scanned":       len(results),
             "targets_with_findings": sum(1 for r in results if r.findings),
-            "total_findings": sum(len(r.findings) for r in results),
-            "critical": sum(r.critical_count for r in results),
-            "high": sum(r.high_count for r in results),
-            "medium": sum(r.medium_count for r in results),
+            "total_findings":        sum(len(r.findings) for r in results),
+            "critical":              sum(r.critical_count for r in results),
+            "high":                  sum(r.high_count for r in results),
+            "medium":                sum(r.medium_count for r in results),
         },
         "results": [
             {
-                "url": result.url,
-                "scanned_at": result.scanned_at,
-                "status": result.status,
-                "error": result.error,
+                "url":                result.url,
+                "scanned_at":         result.scanned_at,
+                "status":             result.status,
+                "error":              result.error,
                 "pages_router_found": result.pages_router_found,
-                "app_router_found": result.app_router_found,
+                "app_router_found":   result.app_router_found,
                 "finding_counts": {
                     "critical": result.critical_count,
-                    "high": result.high_count,
-                    "medium": result.medium_count,
+                    "high":     result.high_count,
+                    "medium":   result.medium_count,
                 },
                 "findings": [asdict(f) for f in result.findings],
             }
@@ -473,24 +729,41 @@ def build_json_report(results: list[TargetResult]) -> dict:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
+    """Parse command-line arguments, run the scanner, and emit reports.
+
+    Supports two mutually exclusive input modes:
+      --urls    One or more URLs provided directly on the command line.
+      --targets Path to a plain-text file containing one URL per line
+                (lines beginning with '#' and blank lines are ignored).
+
+    Optional flags control output paths, run labelling, inter-request delay,
+    HTTP timeout, and logging verbosity.
+
+    Exit codes:
+      0 — Scan completed (findings may or may not exist).
+      1 — Fatal error (bad arguments, unreadable targets file, no URLs).
+    """
     parser = argparse.ArgumentParser(
         description="Next.js Hydration Leakage Scanner (CAIS-2026 Research Tool)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
+
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
         "--urls", nargs="+", metavar="URL",
         help="One or more target URLs to scan.",
     )
-    group.add_argument(
+    input_group.add_argument(
         "--targets", metavar="FILE",
         help="Path to a file containing one URL per line.",
     )
+
     parser.add_argument(
         "--output", metavar="FILE", default=None,
-        help="Also write JSON report to this explicit path.",
+        help="Also write the JSON report to this explicit path.",
     )
     parser.add_argument(
         "--label", metavar="TEXT", default=None,
@@ -501,35 +774,60 @@ def main() -> None:
     )
     parser.add_argument(
         "--delay", type=float, default=0.5, metavar="SECONDS",
-        help="Delay in seconds between requests (default: 0.5).",
+        help="Delay in seconds between consecutive requests (default: 0.5).",
     )
     parser.add_argument(
         "--timeout", type=int, default=15, metavar="SECONDS",
         help="HTTP request timeout in seconds (default: 15).",
     )
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="Enable DEBUG-level logging output.",
+    )
     args = parser.parse_args()
 
+    # Configure logging based on verbosity flag.
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+        stream=sys.stderr,
+    )
+
+    # Resolve the list of target URLs from either --urls or --targets.
     if args.urls:
-        urls = args.urls
+        urls: list[str] = args.urls
     else:
         try:
-            with open(args.targets) as fh:
-                urls = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+            with open(args.targets, encoding="utf-8") as fh:
+                urls = [
+                    line.strip()
+                    for line in fh
+                    if line.strip() and not line.startswith("#")
+                ]
         except OSError as exc:
-            print(f"[ERROR] Cannot read targets file: {exc}", file=sys.stderr)
+            logger.error("Cannot read targets file: %s", exc)
             sys.exit(1)
 
     if not urls:
-        print("[ERROR] No URLs to scan.", file=sys.stderr)
+        logger.error("No URLs to scan.")
         sys.exit(1)
 
     results: list[TargetResult] = []
-    for i, url in enumerate(urls):
-        print(f"[{i+1}/{len(urls)}] Scanning {url} ...", end=" ", flush=True)
-        result = scan_url(url)
-        print(f"{result.status}  —  {len(result.findings)} finding(s)")
+    for index, url in enumerate(urls, start=1):
+        logger.info("[%d/%d] Scanning %s …", index, len(urls), url)
+        result = scan_url(url, timeout=args.timeout)
+        logger.info(
+            "  → status: %s  |  findings: %d  (CRITICAL: %d  HIGH: %d  MEDIUM: %d)",
+            result.status,
+            len(result.findings),
+            result.critical_count,
+            result.high_count,
+            result.medium_count,
+        )
         results.append(result)
-        if i < len(urls) - 1:
+        if index < len(urls):
             time.sleep(args.delay)
 
     print_console_report(results)
@@ -537,13 +835,13 @@ def main() -> None:
     report = build_json_report(results)
 
     saved_path = _save_to_findings_store(report, args.label)
-    print(f"[✓] Report auto-saved : {saved_path}")
-    print(f"[✓] Index updated     : {FINDINGS_DIR / 'index.json'}")
+    logger.info("[✓] Report auto-saved : %s", saved_path)
+    logger.info("[✓] Index updated     : %s", FINDINGS_DIR / "index.json")
 
     if args.output:
-        with open(args.output, "w") as fh:
+        with open(args.output, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=2)
-        print(f"[✓] Report also saved : {args.output}")
+        logger.info("[✓] Report also saved : %s", args.output)
 
 
 if __name__ == "__main__":
