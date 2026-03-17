@@ -1,7 +1,7 @@
 # Next.js Hydration Leakage Scanner
 
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![License: MIT](https://img.shields.io/badge/License-MIT-green)
 ![Conference: CAIS 2026](https://img.shields.io/badge/conference-CAIS%202026-orange)
 
 Automated detection of credential exposure in Next.js applications through server-to-client data serialization vulnerabilities.
@@ -60,8 +60,8 @@ This scanner detects these exposures across both Next.js routing architectures:
 ### Installation
 
 ```bash
-git clone https://github.com/[your-username]/nextjs-hydration-scanner.git
-cd nextjs-hydration-scanner
+git clone https://github.com/gargarnav/next-js_vulnerabilities.git
+cd next-js_vulnerabilities
 
 pip install -r requirements.txt
 ```
@@ -242,6 +242,17 @@ This tool is intended for:
 - Penetration testing engagements with appropriate authorization
 
 Scanning applications without authorization may violate computer fraud laws. Always obtain written permission before testing systems you do not own.
+
+---
+
+## Contact
+
+- **Author**: Arnav Garg
+- **Institution**: BITS Pilani, Pilani Campus
+- **Email**: gargarnav2007@gmail.com
+- **GitHub**: [@gargarnav](https://github.com/gargarnav)
+- **LinkedIn**: [arnavrg](https://linkedin.com/in/arnavrg)
+- **Portfolio**: [arnavgarg.in](https://arnavgarg.in)
 
 ---
 
