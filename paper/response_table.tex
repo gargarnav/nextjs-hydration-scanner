@@ -1,0 +1,168 @@
+\documentclass[11pt]{article}
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\renewcommand{\arraystretch}{1.3}
+\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+
+\begin{document}
+
+\begin{center}
+{\large\bfseries Response to Reviewers' Comments}\\[2pt]
+Paper ID 10: \emph{Hydration Leakage and Over-fetching in Next.js:
+The Security Implications of Server-to-Client Data Serialization}\\[2pt]
+Arnav Garg, BITS Pilani (CAIS'26)
+\end{center}
+
+\vspace{4pt}
+\noindent We thank the reviewers and editors for their careful feedback.
+Below, each comment is paired with the corresponding revision.
+
+\vspace{6pt}
+\begin{longtable}{@{}p{0.44\textwidth}p{0.52\textwidth}@{}}
+\toprule
+\textbf{Reviewer / editor comment} & \textbf{Author's response and action taken} \\
+\midrule
+\endfirsthead
+\multicolumn{2}{@{}l}{\emph{(continued)}}\\
+\toprule
+\textbf{Reviewer / editor comment} & \textbf{Author's response and action taken} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+\multicolumn{2}{@{}l}{\textbf{Reviewer \#1}}\\
+\midrule
+1. All abbreviations should be predefined. &
+Done. Every abbreviation (SSR, HTML, API, SSN, RSC, PoC, DTO, JSON, HTTP,
+HTTPS, CSP, SQL, TOTP, JWT, PAT, AWS, ORM, CWE) is now expanded on first
+use. \\
+
+2. A comparison with related works could be presented. &
+Added \S2.5 ``Comparison with Existing Tools'' and Table~1, comparing the
+scanner with the React taint API, secret scanners, generic SAST, and
+architectural excessive-exposure metrics. \\
+
+3. False positive rate is not quantified. &
+Added \S4.3 ``Detection Effectiveness'' with a full confusion matrix
+(Table~6): precision, recall, and $F_1$. We report recall 100\%, raw
+precision 20.5\%, and 100\% after a short internal-field allowlist. \\
+
+4. No evaluation against real-world Next.js applications. &
+Added a cross-framework evaluation (\S4.4, Table~7) and a
+``Threats to Validity'' subsection (\S6.4) that scopes an authorized,
+at-scale study of deployed applications as future work, with the
+legal/ethical rationale. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{Reviewer \#3}}\\
+\midrule
+Additional experiments on larger/real-world datasets. &
+Added the cross-framework experiment and a scalability benchmark
+(\S4.5, up to 10{,}000-record payloads); production-scale scanning is
+scoped as future work in \S6.4. \\
+
+Add architectural / workflow diagrams. &
+Added Fig.~1 (hydration serialization pipeline) and Fig.~2 (scanner
+workflow flowchart). \\
+
+Discuss scanner performance (runtime, scalability, detection efficiency). &
+Added \S4.5 ``Performance and Scalability'': linear $O(n)$ time,
+$\approx$2.1\,$\mu$s per node, a 2.5\,MB payload analyzed in $\approx$200\,ms. \\
+
+Comparison with existing security/static-analysis tools. &
+Added \S2.5 and Table~1 (see Reviewer \#1, comment 2). \\
+
+Expand related work with academic references. &
+Added five peer-reviewed references and rewrote \S2.2--2.4 around them. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{Reviewer \#9}}\\
+\midrule
+Additional evaluation on larger real-world apps / public datasets. &
+Addressed via the cross-framework experiment (\S4.4) and the scalability
+benchmark (\S4.5); at-scale production study scoped as future work. \\
+
+Compare the scanner with existing tools. &
+Added \S2.5 and Table~1. \\
+
+Add architectural diagrams. &
+Added Figs.~1 and 2. \\
+
+Expand applicability to other SSR frameworks (Nuxt, Remix, SvelteKit). &
+The scanner was extended to all three; \S4.4 (Table~7) reports 32/32
+credentials detected across the four frameworks, and \S6.2 confirms the
+DTO mitigation is framework-agnostic. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{Reviewer \#10}}\\
+\midrule
+Work reads as a documentation report; add research-methodology / scientific
+aspects. &
+Added an explicit threat model (\S1), a controlled experimental protocol
+with defined ground truth (\S3), quantitative detection metrics (\S4.3),
+and a ``Threats to Validity'' subsection (\S6.4). \\
+
+Add a flowchart explaining the method. &
+Added Fig.~2, the scanner workflow flowchart. \\
+
+Literature review is short. &
+Expanded \S2.2--2.4 and added five peer-reviewed references. \\
+
+References 1, 3, 5--12 are web pages / reports, not authenticated. &
+Corrected. Added five verified peer-reviewed references (ECSA 2022,
+NDSS 2019 $\times$2, ACM CCS 2013, and a 2025 static-analysis paper), and
+removed an unverifiable citation. Remaining web references are limited to
+primary sources (framework documentation, OWASP, MITRE CWE, MDN). \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{Reviewer \#11}}\\
+\midrule
+1. Clarify novelty vs.\ Excessive Data Exposure / CWE-200. &
+Added \S2.4 ``Novelty and Positioning'' stating three SSR-hydration-specific
+claims that distinguish the work from generic CWE-200 and REST-oriented
+excessive-exposure analyses. \\
+
+2. Experimental evaluation uses a small synthetic dataset. &
+Added the cross-framework fixture corpus and the scalability benchmark;
+the controlled synthetic corpus (with exact ground truth) is justified in
+\S3 and \S6.4. \\
+
+3. Report precision, recall, $F_1$, and false-positive rate. &
+Added the confusion matrix in \S4.3 / Table~6. \\
+
+4. Compare with existing security tools. &
+Added \S2.5 and Table~1. \\
+
+5. More peer-reviewed references. &
+Added five (see Reviewer \#10). \\
+
+6. Support the multi-framework claim with experiments or state as future
+work. &
+Supported with experiments: \S4.4 / Table~7 demonstrates detection on
+Nuxt, Remix, and SvelteKit. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{Editorial notes}}\\
+\midrule
+The sources cited in the text were not in the correct order. &
+Corrected. References are now numbered in order of first citation, so the
+in-text citation numbers ascend sequentially ([1], [2], [3], \dots). \\
+
+English proofreading. &
+The manuscript was proofread and standardized to consistent
+(American) English throughout. \\
+
+Springer format; author email and affiliation. &
+The paper uses the official Springer \texttt{llncs} template; the author's
+full affiliation and email are included on the title page. \\
+
+\end{longtable}
+
+\end{document}

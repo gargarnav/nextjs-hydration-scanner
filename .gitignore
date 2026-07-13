@@ -3,6 +3,18 @@ vulnerable-nextjs-poc/.next/
 vulnerable-nextjs-poc/node_modules/
 vulnerable-nextjs-poc/tsconfig.tsbuildinfo
 vulnerable-nextjs-poc/package-lock.json
+vulnerable-nextjs-poc/.env*
+
+# ── Cross-framework PoCs / packages ────────────────────────────
+cross-framework/**/node_modules/
+cross-framework/**/.venv/
+cross-framework/**/.nuxt/
+cross-framework/**/.pytest_cache/
+cross-framework/**/__pycache__/
+cross-framework/**/dist/
+cross-framework/**/*.egg-info/
+cross-framework/**/package-lock.json
+cross-framework/**/pnpm-lock.yaml
 
 # ── Python scanner ────────────────────────────────────────────
 __pycache__/
@@ -35,6 +47,7 @@ paper/*.fls
 paper/*.fdb_latexmk
 paper/*.synctex.gz
 paper/*.pdf
+paper/diff.tex
 
 # ── macOS ─────────────────────────────────────────────────────
 .DS_Store
@@ -47,5 +60,12 @@ paper/*.pdf
 *.swo
 
 # ── Local context / notes ─────────────────────────────────────
-PROJECT_CONTEXT.txt
+NOTES.txt
+DEVLOG.md
 .claude/
+
+# ── Confidential review / submission material ─────────────────
+Conference Management Toolkit - View review.pdf
+paper/camera_ready_submission/
+paper/Paper10_CameraReady.zip
+paper/*.docx

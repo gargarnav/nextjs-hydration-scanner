@@ -1,18 +1,114 @@
-@misc{next16docs,
-  author       = {{Vercel}},
-  title        = {{Next.js} Documentation, v16},
-  year         = {2025},
-  howpublished = {\url{https://nextjs.org/docs}},
-  note         = {Accessed: 2026-03-16}
+% ============================================================
+% References — Hydration Leakage and Over-fetching in Next.js
+% Peer-reviewed anchors verified against dblp / ACM DL / NDSS / Springer.
+% ============================================================
+
+% ---------- Peer-reviewed academic sources ----------
+
+@inproceedings{genfer2022,
+  author    = {Genfer, Patric and Zdun, Uwe},
+  title     = {Avoiding Excessive Data Exposure Through Microservice {APIs}},
+  booktitle = {Software Architecture -- 16th European Conference (ECSA 2022)},
+  series    = {Lecture Notes in Computer Science},
+  publisher = {Springer},
+  address   = {Cham},
+  year      = {2022},
+  doi       = {10.1007/978-3-031-16697-6\_1}
 }
 
-@inproceedings{rsc2023,
-  author    = {Gao, Sophia and Abramov, Dan and others},
-  title     = {React Server Components},
-  booktitle = {Proceedings of the 2023 React Conf},
-  year      = {2023},
-  publisher = {Meta Open Source},
-  note      = {\url{https://react.dev/blog/2023/03/22/react-labs-what-we-have-been-working-on-march-2023}}
+@inproceedings{meli2019,
+  author    = {Meli, Michael and McNiece, Matthew R. and Reaves, Bradley},
+  title     = {How Bad Can It Git? Characterizing Secret Leakage in Public
+               {GitHub} Repositories},
+  booktitle = {Proceedings of the 26th Annual Network and Distributed System
+               Security Symposium (NDSS)},
+  year      = {2019},
+  publisher = {Internet Society}
+}
+
+@inproceedings{lekies2013,
+  author    = {Lekies, Sebastian and Stock, Ben and Johns, Martin},
+  title     = {25 Million Flows Later: Large-scale Detection of {DOM}-based {XSS}},
+  booktitle = {Proceedings of the 2013 ACM SIGSAC Conference on Computer and
+               Communications Security (CCS)},
+  pages     = {1193--1204},
+  year      = {2013},
+  publisher = {ACM},
+  doi       = {10.1145/2508859.2516703}
+}
+
+@inproceedings{steffens2019,
+  author    = {Steffens, Marius and Rossow, Christian and Johns, Martin and
+               Stock, Ben},
+  title     = {Don't Trust the Locals: Investigating the Prevalence of
+               Persistent Client-Side Cross-Site Scripting in the Wild},
+  booktitle = {Proceedings of the 26th Annual Network and Distributed System
+               Security Symposium (NDSS)},
+  year      = {2019},
+  publisher = {Internet Society}
+}
+
+@misc{siexvults2025,
+  author       = {Katz, Kyler and Moshtari, Sara and Mujhid, Ibrahim and
+                  Mirakhorli, Mehdi and Garcia, Derek},
+  title        = {{SIExVulTS}: Sensitive Information Exposure Vulnerability
+                  Detection System using Transformer Models and Static Analysis},
+  year         = {2025},
+  howpublished = {arXiv preprint arXiv:2508.19472 [cs.CR]},
+  note         = {\url{https://arxiv.org/abs/2508.19472}}
+}
+
+% ---------- Standards, framework, and primary-source references ----------
+
+@misc{owasp_api2023,
+  author       = {{OWASP Foundation}},
+  title        = {{OWASP} {API} Security Top 10 2023 -- API3:2023 Broken Object
+                  Property Level Authorization},
+  year         = {2023},
+  howpublished = {\url{https://owasp.org/API-Security/editions/2023/en/0x11-t10/}},
+  note         = {Accessed: 2026-07-03}
+}
+
+@misc{cwe200,
+  author       = {{MITRE Corporation}},
+  title        = {{CWE-200}: Exposure of Sensitive Information to an
+                  Unauthorized Actor},
+  year         = {2024},
+  howpublished = {\url{https://cwe.mitre.org/data/definitions/200.html}},
+  note         = {Accessed: 2026-07-03}
+}
+
+@misc{next16docs,
+  author       = {{Vercel}},
+  title        = {{Next.js} Documentation (v16): Data Fetching and Rendering},
+  year         = {2025},
+  howpublished = {\url{https://nextjs.org/docs}},
+  note         = {Accessed: 2026-07-03}
+}
+
+@misc{rsc2023,
+  author       = {{Meta Open Source}},
+  title        = {React Server Components},
+  year         = {2023},
+  howpublished = {\url{https://react.dev/reference/rsc/server-components}},
+  note         = {Accessed: 2026-07-03}
+}
+
+@misc{react_taint,
+  author       = {{Meta Open Source}},
+  title        = {{React} Reference: \texttt{experimental\_taintObjectReference}},
+  year         = {2024},
+  howpublished = {\url{https://react.dev/reference/react/experimental_taintObjectReference}},
+  note         = {Accessed: 2026-07-03}
+}
+
+@misc{next_security,
+  author       = {{Vercel}},
+  title        = {{Next.js} Security: Data Fetching, Server Actions, and
+                  Client Boundaries},
+  year         = {2025},
+  howpublished = {\url{https://nextjs.org/docs/app/building-your-application/authentication}},
+  note         = {Accessed: 2026-07-03}
 }
 
 @misc{owasp_xss,
@@ -20,7 +116,7 @@
   title        = {Cross Site Scripting ({XSS})},
   year         = {2021},
   howpublished = {\url{https://owasp.org/www-community/attacks/xss/}},
-  note         = {Accessed: 2026-03-16}
+  note         = {Accessed: 2026-07-03}
 }
 
 @misc{owasp_sqli,
@@ -28,23 +124,7 @@
   title        = {{SQL} Injection},
   year         = {2021},
   howpublished = {\url{https://owasp.org/www-community/attacks/SQL_Injection}},
-  note         = {Accessed: 2026-03-16}
-}
-
-@misc{owasp_api2023,
-  author       = {{OWASP Foundation}},
-  title        = {{OWASP} {API} Security Top 10 2023},
-  year         = {2023},
-  howpublished = {\url{https://owasp.org/API-Security/editions/2023/en/0x11-t10/}},
-  note         = {Accessed: 2026-03-16}
-}
-
-@misc{cwe200,
-  author       = {{MITRE Corporation}},
-  title        = {{CWE-200}: Exposure of Sensitive Information to an Unauthorized Actor},
-  year         = {2024},
-  howpublished = {\url{https://cwe.mitre.org/data/definitions/200.html}},
-  note         = {Accessed: 2026-03-16}
+  note         = {Accessed: 2026-07-03}
 }
 
 @misc{csp_mdn,
@@ -52,48 +132,21 @@
   title        = {Content Security Policy ({CSP})},
   year         = {2024},
   howpublished = {\url{https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP}},
-  note         = {Accessed: 2026-03-16}
-}
-
-@misc{next_security,
-  author       = {{Vercel}},
-  title        = {{Next.js} Security Documentation},
-  year         = {2025},
-  howpublished = {\url{https://nextjs.org/docs/app/building-your-application/authentication}},
-  note         = {Accessed: 2026-03-16}
-}
-
-@misc{nwh2022,
-  author       = {Hodgson, Neil and others},
-  title        = {The Perils of Over-fetching in {Next.js} Applications},
-  year         = {2022},
-  howpublished = {Personal Blog},
-  note         = {Accessed: 2026-03-16}
+  note         = {Accessed: 2026-07-03}
 }
 
 @misc{basal2022,
   author       = {Basal, Netanel},
   title        = {Don't Expose Sensitive Data in {Next.js}},
   year         = {2022},
-  howpublished = {\url{https://netbasal.com}},
-  note         = {Accessed: 2026-03-16}
-}
-
-@inproceedings{luo2023,
-  author    = {Luo, Wei and Zhang, Hao and Chen, Jing},
-  title     = {State Leakage in Single-Page Applications via Developer Tools},
-  booktitle = {Proceedings of the 2023 ACM Conference on Computer and
-               Communications Security},
-  year      = {2023},
-  publisher = {ACM},
-  pages     = {1123--1137},
-  doi       = {10.1145/3576915.3576920}
+  howpublished = {Practitioner blog, \url{https://netbasal.com}},
+  note         = {Accessed: 2026-07-03}
 }
 
 @misc{prisma,
-  author       = {{Prisma Data}},
+  author       = {{Prisma Data, Inc.}},
   title        = {Prisma {ORM} Documentation},
   year         = {2025},
   howpublished = {\url{https://www.prisma.io/docs}},
-  note         = {Accessed: 2026-03-16}
+  note         = {Accessed: 2026-07-03}
 }

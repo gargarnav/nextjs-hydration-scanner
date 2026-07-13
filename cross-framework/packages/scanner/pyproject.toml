@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssr-boundary-scanner"
+version = "0.1.0"
+description = "Black-box scanner for sensitive data exposed in SSR hydration payloads (Next.js, SvelteKit, Remix, Nuxt)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["security", "nextjs", "sveltekit", "remix", "nuxt", "ssr", "hydration", "scanner"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Topic :: Security",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+  "requests>=2.31",
+  "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-mock>=3.12",
+  "responses>=0.25",
+]
+
+[project.scripts]
+ssr-scanner = "ssr_boundary_scanner.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ssr_boundary_scanner = ["sensitive-patterns.json"]
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: tests that require network access or live PoC apps",
+]

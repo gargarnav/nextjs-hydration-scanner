@@ -1,0 +1,66 @@
+{
+  "name": "eslint-plugin-ssr-boundary",
+  "version": "0.1.0",
+  "description": "ESLint rules that detect sensitive data crossing the SSR server-client serialization boundary (Next.js, SvelteKit, Remix, Nuxt)",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('fs').copyFileSync('../../sensitive-patterns.json', 'src/sensitive-patterns.json')\"",
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests"
+  },
+  "keywords": [
+    "eslint",
+    "eslint-plugin",
+    "nextjs",
+    "sveltekit",
+    "remix",
+    "nuxt",
+    "security",
+    "ssr",
+    "hydration",
+    "data-leakage",
+    "typescript",
+    "static-analysis"
+  ],
+  "author": "Arnav Garg <gargarnav2007@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gargarnav/ssr-boundary"
+  },
+  "homepage": "https://github.com/gargarnav/ssr-boundary#readme",
+  "peerDependencies": {
+    "@typescript-eslint/parser": ">=7.0.0",
+    "eslint": ">=8.57.0 || >=9.0.0",
+    "typescript": ">=4.8.4"
+  },
+  "dependencies": {
+    "@typescript-eslint/utils": "^8.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "^8.0.0",
+    "@typescript-eslint/rule-tester": "^8.0.0",
+    "eslint": "^9.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  }
+}

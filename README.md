@@ -27,12 +27,40 @@ If you use this tool in academic research, please cite:
 
 ## Overview
 
-When Next.js developers return raw database records as component props, sensitive fields — password hashes, API keys, SSNs, 2FA secrets — are silently embedded in plain-text HTML and delivered to every client browser. No authentication bypass is required; the data is present in the initial page load for any visitor.
+When Next.js developers return raw database records as component props, sensitive fields (password hashes, API keys, SSNs, 2FA secrets) are silently embedded in plain-text HTML and delivered to every client browser. No authentication bypass is required; the data is present in the initial page load for any visitor.
 
 This scanner detects these exposures across both Next.js routing architectures:
 
 - **Pages Router**: `__NEXT_DATA__` JSON script tag embedded in HTML
 - **App Router**: React Server Component (RSC) streaming payloads (`self.__next_f.push(...)`)
+
+---
+
+## Repository Structure
+
+```
+.
+├── nextjs-hydration-scanner/   Next.js scanner (this README): scanner.py, requirements.txt
+├── vulnerable-nextjs-poc/      Vulnerable Next.js PoC app (Pages Router + App Router routes)
+├── cross-framework/            Cross-framework generalization: same vulnerability class,
+│                               same detection approach, on three other SSR frameworks
+│   ├── poc-apps/
+│   │   ├── vulnerable-nuxt-poc/       Vulnerable Nuxt 3 PoC (__NUXT_DATA__)
+│   │   ├── vulnerable-remix-poc/      Vulnerable Remix PoC (__remixContext)
+│   │   └── vulnerable-sveltekit-poc/  Vulnerable SvelteKit PoC (__sveltekit_data)
+│   ├── packages/
+│   │   ├── scanner/                   Extended scanner with per-framework extractors
+│   │   └── eslint-plugin-ssr-boundary/  Static, type-aware ESLint rule prototype (write-time
+│   │                                    complement to the runtime scanner)
+│   └── docs/rules/                    Documentation for the ESLint rule
+└── paper/                      LaTeX source, compiled PDF, and camera-ready submission
+                                 materials for the CAIS 2026 paper
+```
+
+The cross-framework detection results (32/32 planted credentials found across Next.js,
+Nuxt, Remix, and SvelteKit, zero false positives) are reported in the paper's
+cross-framework evaluation section; `cross-framework/` contains the fixtures and code
+that produced them.
 
 ---
 
@@ -92,7 +120,7 @@ python scanner.py --urls https://example.com --verbose
 
 ```
 ========================================================================
-  Next.js Hydration Leakage Scanner — Results
+  Next.js Hydration Leakage Scanner: Results
   Scanned 2 target(s)  |  2026-03-17 14:32:01
 ========================================================================
 
@@ -103,12 +131,12 @@ python scanner.py --urls https://example.com --verbose
   Findings: 8 CRITICAL  2 HIGH  1 MEDIUM
 
     [CRITICAL]  __NEXT_DATA__.props.pageProps.user.password_hash
-      Reason  : Password hash — field name matches pattern /password_hash/i
+      Reason  : Password hash (field name matches pattern /password_hash/i)
       Channel : __NEXT_DATA__
       Preview : $2b$10...3bKm  [60 chars]
 
     [CRITICAL]  __NEXT_DATA__.props.pageProps.user.two_factor_secret
-      Reason  : 2FA seed / TOTP secret — field name matches pattern /two_factor_secret/i
+      Reason  : 2FA seed / TOTP secret (field name matches pattern /two_factor_secret/i)
       Channel : __NEXT_DATA__
       Preview : JBSWY3...YPYI  [32 chars]
 
@@ -175,7 +203,7 @@ The JSON report structure:
           "field_path": "__NEXT_DATA__.props.pageProps.user.password_hash",
           "field_name": "password_hash",
           "value_preview": "$2b$10...3bKm  [60 chars]",
-          "reason": "Password hash — field name matches pattern /password_hash/i",
+          "reason": "Password hash (field name matches pattern /password_hash/i)",
           "severity": "CRITICAL",
           "channel": "__NEXT_DATA__",
           "match_type": "field_name"
